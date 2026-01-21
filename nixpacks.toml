@@ -2,9 +2,10 @@
 nixPkgs = [
     "python3",
     "ffmpeg",
-    "chromium",      # We keep this to get dependencies
-    "glib",          # <--- THE MISSING LIBRARY
+    "chromium",
+    "glib",
     "nss",
+    "nspr",
     "dbus",
     "atk",
     "cups",
@@ -13,16 +14,19 @@ nixPkgs = [
     "pango",
     "cairo",
     "gdk-pixbuf",
+    "xorg.libX11",
     "xorg.libXcomposite",
     "xorg.libXdamage",
     "xorg.libXfixes",
     "xorg.libXrandr",
     "mesa",
-    "alsa-lib"
+    "alsa-lib",
+    "at-spi2-atk",
+    "at-spi2-core"
 ]
 
 [phases.install]
-cmds = ["pip install -r requirements.txt", "playwright install-deps chromium"]
+cmds = ["pip install -r requirements.txt"]
 
 [start]
 cmd = "python main.py"
