@@ -1,67 +1,73 @@
 import os
 import asyncio
 import subprocess
-import json
 import sys
 from playwright.async_api import async_playwright
 
-# --- SUPER LITE CONFIG ---
-# We only render 5 frames total to stop the crash
-TOTAL_FRAMES = 5  
-FPS = 1
+# --- HD CONFIG ---
+FPS = 24
+DURATION = 4
+TOTAL_FRAMES = FPS * DURATION
 
-async def run_diagnostic():
-    print("🚑 STARTING DIAGNOSTIC MODE...")
+async def run_hd_test():
+    print("🎬 STARTING HD RENDER (1080x1920)...")
     
-    # 1. PRINT SYSTEM INFO (Check if we have memory)
-    try:
-        print("📊 Checking System...")
-        os.system("free -m") # Prints available RAM
-    except:
-        pass
-
-    # 2. SETUP PATHS
     current_folder = os.getcwd()
     template_path = "file://" + os.path.join(current_folder, "templates", "engine.html")
     output_folder = os.path.join(current_folder, "frames")
     
-    # Force clean start
-    if not os.path.exists(output_folder): 
-        os.makedirs(output_folder)
-    
-    # 3. LAUNCH CHROME (Minimal Mode)
-    print("🚀 Attempting to launch Chrome...")
+    # Create folder if missing
+    if not os.path.exists(output_folder): os.makedirs(output_folder)
+
+    # 1. LAUNCH CHROME
+    print("🚀 Launching Chrome...")
     async with async_playwright() as p:
         try:
             browser = await p.chromium.launch(
-                args=[
-                    "--no-sandbox", 
-                    "--disable-setuid-sandbox", 
-                    "--disable-dev-shm-usage",
-                    "--disable-gpu"
-                ]
+                args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]
             )
-            # Tiny resolution to save RAM
-            page = await browser.new_page(viewport={"width": 300, "height": 300})
+            page = await browser.new_page(viewport={"width": 1080, "height": 1920})
             
-            print(f"🔗 Loading HTML...")
-            await page.goto(template_path)
+            # Use fake data
+            fake_url = f"{template_path}?title=CYBER%20BOOTS&price=$299"
+            await page.goto(fake_url)
             
-            print("📸 Taking 5 Test Photos...")
+            print(f"📸 Recording {TOTAL_FRAMES} frames...")
             for frame in range(TOTAL_FRAMES):
                 await page.evaluate(f"if(window.seekToFrame) window.seekToFrame({frame}, {FPS})")
                 await page.screenshot(path=f"{output_folder}/frame_{frame:04d}.png")
-                print(f"   - Frame {frame} saved")
+                if frame % 10 == 0: print(f"   Saved frame {frame}/{TOTAL_FRAMES}")
             
             await browser.close()
-            print("✅ Chrome worked!")
-            
         except Exception as e:
-            print(f"❌ CHROME DIED: {e}")
-            sys.exit(1) # Stop here if Chrome fails
+            print(f"❌ CRASH: {e}")
+            sys.exit(1)
 
-    # 4. STITCH VIDEO
-    print("🔨 Making Video...")
-    video_name = "mini_test.mp4"
-    # Ultra-fast settings
-    os.system(f"ffmpeg -y -r {FPS} -i {output_folder}/frame_%04d.png -vcodec libx264 -pix_fmt yuv420p -preset ultrafast {video_name}")
+    # 2. STITCH VIDEO (Now safely inside the function!)
+    print("🔨 Stitching HD Video...")
+    video_name = "hd_test.mp4"
+    
+    # Run FFmpeg
+    exit_code = os.system(f"ffmpeg -y -r {FPS} -i {output_folder}/frame_%04d.png -vcodec libx264 -pix_fmt yuv420p -preset veryfast {video_name}")
+    
+    if exit_code != 0:
+        print("❌ FFmpeg failed to stitch video.")
+        return
+
+    # 3. UPLOAD TO TRANSFER.SH
+    print("📤 Uploading...")
+    try:
+        cmd = f'curl --upload-file {video_name} https://transfer.sh/{video_name}'
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        
+        link = result.stdout.strip()
+        print("\n" + "🎬"*20)
+        print(f"YOUR HD VIDEO IS READY (Link valid for 14 days):")
+        print(f"👉 {link}")
+        print("🎬"*20 + "\n")
+            
+    except Exception as e:
+        print(f"❌ Upload failed: {e}")
+
+if __name__ == "__main__":
+    asyncio.run(run_hd_test())
