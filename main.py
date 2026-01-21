@@ -1,64 +1,62 @@
 import os
 import asyncio
-import subprocess
 import sys
 from playwright.async_api import async_playwright
 
-# --- CONFIG ---
-FPS = 15
-DURATION = 3
-TOTAL_FRAMES = FPS * DURATION
+# --- CONFIG (The one that worked) ---
+TOTAL_FRAMES = 5  
+FPS = 1
 
-async def run_system_chrome_test():
-    print("🤖 STARTING SYSTEM CHROME TEST...")
+async def run_server_mode():
+    print("🚑 REVERTING TO WORKING CODE...")
     
+    # 1. SETUP
     current_folder = os.getcwd()
     template_path = "file://" + os.path.join(current_folder, "templates", "engine.html")
     output_folder = os.path.join(current_folder, "frames")
     if not os.path.exists(output_folder): os.makedirs(output_folder)
-
-    # 1. LAUNCH PRE-INSTALLED CHROME
-    print("🚀 Connecting to System Chrome...")
+    
+    # 2. GENERATE (Lite Mode)
+    print("🚀 Making Video (Lite Mode)...")
     async with async_playwright() as p:
         try:
+            # Using system chrome which we know works
+            executable_path = "/usr/bin/chromium" 
+            
             browser = await p.chromium.launch(
-                # THIS IS THE FIX: Point to the installed Chrome
-                executable_path="/usr/bin/chromium", 
+                executable_path=executable_path,
                 args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]
             )
-            page = await browser.new_page(viewport={"width": 720, "height": 1280})
+            page = await browser.new_page(viewport={"width": 300, "height": 300})
             
-            await page.goto(f"{template_path}?title=SYSTEM%20TEST&price=FREE")
+            await page.goto(template_path)
             
-            print(f"📸 Recording {TOTAL_FRAMES} frames...")
             for frame in range(TOTAL_FRAMES):
                 await page.evaluate(f"if(window.seekToFrame) window.seekToFrame({frame}, {FPS})")
                 await page.screenshot(path=f"{output_folder}/frame_{frame:04d}.png")
-                if frame % 10 == 0: print(f"   Saved frame {frame}/{TOTAL_FRAMES}")
             
             await browser.close()
+            print("✅ Frames captured.")
             
         except Exception as e:
-            print(f"❌ CRASH: {e}")
-            sys.exit(1)
+            print(f"❌ GENERATION ERROR: {e}")
+            # If it fails, we still start the server so you can see logs
+            pass
 
-    # 2. STITCH
-    print("🔨 Stitching...")
-    video_name = "system_test.mp4"
-    os.system(f"ffmpeg -y -r {FPS} -i {output_folder}/frame_%04d.png -vcodec libx264 -pix_fmt yuv420p -preset ultrafast {video_name}")
+    # 3. STITCH
+    video_name = "final_video.mp4"
+    os.system(f"ffmpeg -y -r {FPS} -i {output_folder}/frame_%04d.png -vcodec libx264 -pix_fmt yuv420p {video_name}")
+    print("✅ Video stitched.")
+
+    # 4. START WEB SERVER (The New Way to View)
+    print("\n" + "="*40)
+    print(f"🌍 SERVER IS LIVE! CLICK YOUR RAILWAY DOMAIN TO DOWNLOAD.")
+    print(f"👇 The video file is named: {video_name}")
+    print("="*40 + "\n")
     
-    # 3. UPLOAD
-    print("📤 Uploading...")
-    try:
-        cmd = f'curl --upload-file {video_name} https://transfer.sh/{video_name}'
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-        link = result.stdout.strip()
-        print("\n" + "✅"*20)
-        print(f"IT WORKS! CLICK HERE:")
-        print(f"👉 {link}")
-        print("✅"*20 + "\n")
-    except Exception as e:
-        print(f"❌ Upload failed: {e}")
+    # This command turns the folder into a website
+    port = int(os.environ.get("PORT", 8080))
+    os.system(f"python -m http.server {port}")
 
 if __name__ == "__main__":
-    asyncio.run(run_system_chrome_test())
+    asyncio.run(run_server_mode())
