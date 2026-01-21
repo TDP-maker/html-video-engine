@@ -1,4 +1,2 @@
 playwright
-pyairtable
-openai
-nest_asyncio
+ffmpeg
