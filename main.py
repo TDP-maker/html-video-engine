@@ -1,89 +1,68 @@
 import os
-import threading
-import http.server
-import socketserver
 import asyncio
 import subprocess
 import imageio_ffmpeg
+from fastapi import FastAPI, BackgroundTasks
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
 from playwright.async_api import async_playwright
+import uvicorn
 
-# --- CONFIGURATION ---
-PORT = int(os.environ.get("PORT", 8080))
-FPS = 30  # High quality 30fps
-DURATION = 5 # 5 second video
+app = FastAPI()
 
-async def run_production_render(job_data):
-    # 1. SETUP DIMENSIONS
-    # Toggle between Reel (9:16) and Square (1:1)
-    if job_data.get("format") == "square":
-        width, height = 1080, 1080
-    else:
-        width, height = 1080, 1920
+# --- THE DATA MODEL ---
+class VideoBrief(BaseModel):
+    title: str = "Default Title"
+    cta: str = "Click Here"
+    img: str = "https://images.unsplash.com/photo-1542291026-7eec264c27ff"
+    color: str = "#00ff9d"
+    format: str = "reel" # or "square"
 
+# --- THE RENDER ENGINE ---
+async def render_video(brief: VideoBrief):
+    width, height = (1080, 1080) if brief.format == "square" else (1080, 1920)
+    fps = 30
+    duration = 5
+    
     current_folder = os.getcwd()
     output_folder = os.path.join(current_folder, "frames")
     if not os.path.exists(output_folder): os.makedirs(output_folder)
 
-    # 2. BUILD THE DATA URL
-    # This passes your AI's brief into the HTML template
-    query_params = f"?title={job_data['title']}&cta={job_data['cta']}&img={job_data['img']}&color={job_data['color']}"
-    template_url = f"file://{os.path.join(current_folder, 'templates', 'engine.html')}{query_params}"
+    # Encode data for the HTML template
+    query = f"?title={brief.title.replace(' ', '+')}&cta={brief.cta.replace(' ', '+')}&img={brief.img}&color={brief.color.replace('#', '%23')}"
+    template_url = f"file://{os.path.join(current_folder, 'templates', 'engine.html')}{query}"
 
     async with async_playwright() as p:
-        try:
-            # Launching the Docker-provided Chromium
-            browser = await p.chromium.launch(args=["--no-sandbox"])
-            page = await browser.new_page(viewport={"width": width, "height": height})
-            await page.goto(template_url)
-            
-            # 3. RECORDING
-            total_frames = FPS * DURATION
-            for frame in range(total_frames):
-                # Tell the HTML to move to the specific frame
-                await page.evaluate(f"if(window.seekToFrame) window.seekToFrame({frame}, {FPS})")
-                await page.screenshot(path=f"{output_folder}/frame_{frame:04d}.png")
-            
-            await browser.close()
+        browser = await p.chromium.launch(args=["--no-sandbox"])
+        page = await browser.new_page(viewport={"width": width, "height": height})
+        await page.goto(template_url)
+        
+        for frame in range(fps * duration):
+            await page.evaluate(f"window.seekToFrame({frame}, {fps})")
+            await page.screenshot(path=f"{output_folder}/frame_{frame:04d}.png")
+        await browser.close()
 
-            # 4. STITCHING
-            video_name = f"creative_{job_data['format']}.mp4"
-            ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
-            subprocess.run([
-                ffmpeg_exe, "-y", "-r", str(FPS), 
-                "-i", f"{output_folder}/frame_%04d.png", 
-                "-vcodec", "libx264", "-crf", "18", # High quality 18
-                "-pix_fmt", "yuv420p", video_name
-            ])
-            
-            # Update the web view
-            with open("index.html", "w") as f:
-                f.write(f"<h1>✅ CREATIVE READY!</h1><a href='{video_name}' style='font-size:40px'>Download {job_data['format'].upper()} Video</a>")
-                
-        except Exception as e:
-            with open("index.html", "w") as f:
-                f.write(f"<h1>❌ RENDER ERROR: {str(e)}</h1>")
+    video_name = f"final_output.mp4"
+    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+    subprocess.run([ffmpeg_exe, "-y", "-r", str(fps), "-i", f"{output_folder}/frame_%04d.png", "-vcodec", "libx264", "-pix_fmt", "yuv420p", video_name])
+    print(f"✅ Render Complete: {video_name}")
 
-# --- WEB INTERFACE ---
-def run_server():
-    Handler = http.server.SimpleHTTPRequestHandler
-    with socketserver.TCPServer(("", PORT), Handler) as httpd:
-        httpd.serve_forever()
+# --- THE ENDPOINTS ---
+
+@app.get("/")
+async def home():
+    return {"status": "Online", "message": "Video Engine Ready for Make.com"}
+
+@app.post("/generate")
+async def generate(brief: VideoBrief, background_tasks: BackgroundTasks):
+    # This runs the render in the background so Make.com doesn't time out
+    background_tasks.add_task(render_video, brief)
+    return {"message": "Render started", "status": "processing"}
+
+@app.get("/download")
+async def download():
+    return FileResponse("final_output.mp4", media_type="video/mp4", filename="creative.mp4")
 
 if __name__ == "__main__":
-    # Start the web server so Railway is happy
-    threading.Thread(target=run_server, daemon=True).start()
-
-    # MOCK DATA: In a real app, this comes from your Frontend/AI
-    mock_brief = {
-        "title": "FLASH SALE TODAY",
-        "cta": "GET 50% OFF",
-        "img": "https://images.unsplash.com/photo-1542291026-7eec264c27ff",
-        "color": "%23ff0055", # Hot Pink
-        "format": "reel" # Change to 'square' to test 1:1
-    }
-
-    # Start the render
-    asyncio.run(run_production_render(mock_brief))
-    
-    # Keep alive
-    while True: import time; time.sleep(1)
+    port = int(os.environ.get("PORT", 8080))
+    uvicorn.run(app, host="0.0.0.0", port=port)
