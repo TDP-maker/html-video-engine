@@ -1,2 +1,5 @@
 playwright
 imageio-ffmpeg
+fastapi
+uvicorn
+pydantic
