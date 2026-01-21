@@ -2,61 +2,66 @@ import os
 import asyncio
 import subprocess
 import json
+import sys
 from playwright.async_api import async_playwright
 
-# --- CONFIG ---
-FPS = 15              # Standard Speed
-DURATION = 3          # 3 Seconds
-TOTAL_FRAMES = FPS * DURATION
+# --- SUPER LITE CONFIG ---
+# We only render 5 frames total to stop the crash
+TOTAL_FRAMES = 5  
+FPS = 1
 
-async def run_test():
-    print("🧪 STARTING RENDER + UPLOAD TEST...")
+async def run_diagnostic():
+    print("🚑 STARTING DIAGNOSTIC MODE...")
     
-    current_folder = os.getcwd()
-    template_url = "file://" + os.path.join(current_folder, "templates", "engine.html")
-    output_folder = os.path.join(current_folder, "frames")
-    if not os.path.exists(output_folder): os.makedirs(output_folder)
-
-    # 1. GENERATE VIDEO
-    print("🚀 Launching Chrome...")
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(args=["--no-sandbox", "--disable-setuid-sandbox"])
-        page = await browser.new_page(viewport={"width": 720, "height": 1280})
-        
-        await page.goto(template_url)
-        
-        print("📸 Recording Frames...")
-        for frame in range(TOTAL_FRAMES):
-            await page.evaluate(f"if(window.seekToFrame) window.seekToFrame({frame}, {FPS})")
-            await page.screenshot(path=f"{output_folder}/frame_{frame:04d}.png")
-        
-        await browser.close()
-
-    # 2. STITCH VIDEO
-    print("🔨 Stitching video...")
-    video_name = "test_output.mp4"
-    os.system(f"ffmpeg -y -r {FPS} -i {output_folder}/frame_%04d.png -vcodec libx264 -pix_fmt yuv420p {video_name}")
-    
-    # 3. UPLOAD VIDEO (The New Part)
-    print("📤 Uploading video to File.io so you can see it...")
-    
-    # We use 'curl' to send the file to a free hosting service
-    result = subprocess.run(
-        ["curl", "-F", f"file=@{video_name}", "https://file.io"],
-        capture_output=True, text=True
-    )
-    
+    # 1. PRINT SYSTEM INFO (Check if we have memory)
     try:
-        response = json.loads(result.stdout)
-        if response.get("success"):
-            print("\n" + "="*40)
-            print(f"🎉 VIDEO READY! CLICK HERE TO WATCH:")
-            print(f"👉 {response.get('link')}")
-            print("="*40 + "\n")
-        else:
-            print("❌ Upload failed:", result.stdout)
+        print("📊 Checking System...")
+        os.system("free -m") # Prints available RAM
     except:
-        print("⚠️ Raw Upload Output:", result.stdout)
+        pass
 
-if __name__ == "__main__":
-    asyncio.run(run_test())
+    # 2. SETUP PATHS
+    current_folder = os.getcwd()
+    template_path = "file://" + os.path.join(current_folder, "templates", "engine.html")
+    output_folder = os.path.join(current_folder, "frames")
+    
+    # Force clean start
+    if not os.path.exists(output_folder): 
+        os.makedirs(output_folder)
+    
+    # 3. LAUNCH CHROME (Minimal Mode)
+    print("🚀 Attempting to launch Chrome...")
+    async with async_playwright() as p:
+        try:
+            browser = await p.chromium.launch(
+                args=[
+                    "--no-sandbox", 
+                    "--disable-setuid-sandbox", 
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu"
+                ]
+            )
+            # Tiny resolution to save RAM
+            page = await browser.new_page(viewport={"width": 300, "height": 300})
+            
+            print(f"🔗 Loading HTML...")
+            await page.goto(template_path)
+            
+            print("📸 Taking 5 Test Photos...")
+            for frame in range(TOTAL_FRAMES):
+                await page.evaluate(f"if(window.seekToFrame) window.seekToFrame({frame}, {FPS})")
+                await page.screenshot(path=f"{output_folder}/frame_{frame:04d}.png")
+                print(f"   - Frame {frame} saved")
+            
+            await browser.close()
+            print("✅ Chrome worked!")
+            
+        except Exception as e:
+            print(f"❌ CHROME DIED: {e}")
+            sys.exit(1) # Stop here if Chrome fails
+
+    # 4. STITCH VIDEO
+    print("🔨 Making Video...")
+    video_name = "mini_test.mp4"
+    # Ultra-fast settings
+    os.system(f"ffmpeg -y -r {FPS} -i {output_folder}/frame_%04d.png -vcodec libx264 -pix_fmt yuv420p -preset ultrafast {video_name}")
