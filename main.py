@@ -60,3 +60,9 @@ async def run_server_mode():
 
 if __name__ == "__main__":
     asyncio.run(run_server_mode())
+# ... previous code ...
+
+# 4. START WEB SERVER
+print(f"🌍 SERVER IS LIVE! CLICK YOUR RAILWAY DOMAIN TO DOWNLOAD.")
+port = int(os.environ.get("PORT", 8080))
+os.system(f"python -m http.server {port}")
