@@ -1,10 +1,10 @@
-# Use a Python image that already includes Chromium dependencies
-FROM mcr.microsoft.com/playwright/python:v1.49.0-jammy
+# Use the updated version required by the server
+FROM mcr.microsoft.com/playwright/python:v1.57.0-jammy
 
 # Set working directory
 WORKDIR /app
 
-# Install FFmpeg
+# Install FFmpeg for video stitching
 RUN apt-get update && apt-get install -y ffmpeg
 
 # Copy requirements and install
