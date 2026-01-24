@@ -4,8 +4,9 @@ import asyncio
 import subprocess
 import imageio_ffmpeg
 import httpx
-from fastapi import FastAPI, BackgroundTasks, HTTPException
+from fastapi import FastAPI, BackgroundTasks, HTTPException, Header, Depends
 from fastapi.responses import FileResponse
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 from playwright.async_api import async_playwright
 import uvicorn
@@ -17,6 +18,19 @@ app = FastAPI()
 
 # Store video status
 video_jobs = {}
+
+# --- API KEY AUTHENTICATION ---
+API_KEY = os.environ.get("API_KEY", "")
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+async def verify_api_key(api_key: str = Depends(api_key_header)):
+    """Verify API key for protected endpoints"""
+    if not API_KEY:
+        # No API key set = no protection (for development)
+        return True
+    if api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+    return True
 
 # --- DATA MODELS ---
 
@@ -286,8 +300,8 @@ async def home():
     }
 
 @app.post("/generate")
-async def generate(brief: VideoBrief, background_tasks: BackgroundTasks):
-    """Original endpoint - template-based video"""
+async def generate(brief: VideoBrief, background_tasks: BackgroundTasks, _: bool = Depends(verify_api_key)):
+    """Original endpoint - template-based video (API key required)"""
     video_id = str(uuid.uuid4())[:8]
     background_tasks.add_task(render_video, brief, video_id)
     return {
@@ -298,8 +312,8 @@ async def generate(brief: VideoBrief, background_tasks: BackgroundTasks):
     }
 
 @app.post("/generate-html")
-async def generate_html_video(request: HTMLVideoRequest, background_tasks: BackgroundTasks):
-    """Render custom HTML as video"""
+async def generate_html_video(request: HTMLVideoRequest, background_tasks: BackgroundTasks, _: bool = Depends(verify_api_key)):
+    """Render custom HTML as video (API key required)"""
     video_id = str(uuid.uuid4())[:8]
     background_tasks.add_task(render_video_from_html, request.html, video_id, request.format, request.fps)
     return {
@@ -310,8 +324,8 @@ async def generate_html_video(request: HTMLVideoRequest, background_tasks: Backg
     }
 
 @app.post("/generate-from-url")
-async def generate_from_url(request: URLVideoRequest, background_tasks: BackgroundTasks):
-    """AI generates HTML from URL, then renders as video"""
+async def generate_from_url(request: URLVideoRequest, background_tasks: BackgroundTasks, _: bool = Depends(verify_api_key)):
+    """AI generates HTML from URL, then renders as video (API key required)"""
     video_id = str(uuid.uuid4())[:8]
 
     try:
