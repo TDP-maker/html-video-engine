@@ -3,3 +3,5 @@ imageio-ffmpeg
 fastapi
 uvicorn
 pydantic
+httpx
+openai
