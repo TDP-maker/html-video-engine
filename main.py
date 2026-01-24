@@ -214,12 +214,51 @@ async def render_video_from_html(html_content: str, video_id: str, format: str =
 async def generate_html_from_url(url: str, prompt: str = "") -> str:
     """Use OpenAI to generate HTML video content from a URL"""
 
+    base_url = '/'.join(url.split('/')[:3])  # Get domain like https://example.com
+
     async with httpx.AsyncClient() as client:
         try:
             response = await client.get(url, follow_redirects=True, timeout=30)
             page_content = response.text[:15000]
         except Exception as e:
             page_content = f"Could not fetch URL: {str(e)}"
+
+    # Extract image URLs from HTML
+    image_urls = []
+
+    # Find og:image (usually the main product image)
+    og_images = re.findall(r'property="og:image"\s+content="([^"]+)"', page_content)
+    og_images += re.findall(r'content="([^"]+)"\s+property="og:image"', page_content)
+    image_urls.extend(og_images)
+
+    # Find regular img tags
+    img_tags = re.findall(r'<img[^>]+src="([^"]+)"', page_content)
+    for img in img_tags:
+        if img.startswith('http'):
+            image_urls.append(img)
+        elif img.startswith('//'):
+            image_urls.append('https:' + img)
+        elif img.startswith('/'):
+            image_urls.append(base_url + img)
+
+    # Find srcset images
+    srcset_imgs = re.findall(r'srcset="([^"]+)"', page_content)
+    for srcset in srcset_imgs:
+        urls = re.findall(r'(https?://[^\s,]+)', srcset)
+        image_urls.extend(urls)
+
+    # Filter for likely product images (larger images, not icons)
+    product_images = []
+    for img in image_urls:
+        if any(skip in img.lower() for skip in ['icon', 'logo', 'sprite', '.svg', 'pixel', 'tracking', '1x1']):
+            continue
+        if img not in product_images:
+            product_images.append(img)
+
+    # Take top 10 images
+    product_images = product_images[:10]
+
+    print(f"📸 Found {len(product_images)} product images")
 
     client = OpenAI()
 
@@ -263,14 +302,22 @@ CONTENT FLOW:
 
 Return ONLY the complete HTML code."""
 
+    # Build image list for prompt
+    images_text = "\n".join([f"- {img}" for img in product_images]) if product_images else "No images found"
+
     user_prompt = f"""Create an animated HTML video for:
 
 URL: {url}
+
+PRODUCT IMAGES FOUND (use these exact URLs):
+{images_text}
 
 Website content:
 {page_content}
 
 {f"Instructions: {prompt}" if prompt else ""}
+
+IMPORTANT: Use the product images listed above in your HTML. Display them with <img src="URL"> tags.
 
 Generate complete HTML with animations."""
 
