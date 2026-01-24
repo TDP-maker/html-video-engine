@@ -223,7 +223,7 @@ async def generate_html_from_url(url: str, prompt: str = "") -> str:
 
     client = OpenAI()
 
-    system_prompt = """You are an expert at creating animated HTML video content for Instagram/TikTok reels.
+    system_prompt = """You are an expert at creating animated HTML product videos for Instagram/TikTok reels.
 
 Create a multi-frame HTML video presentation with these requirements:
 
@@ -233,25 +233,33 @@ STRUCTURE:
 - Include timing array: const timing = [3000, 4000, 4000, 4000, 4000, 3000];
 - Container: .reel-container with 1080x1920px
 
+IMAGES - CRITICAL:
+- Extract ALL product image URLs from the website HTML (look for <img src="...">, og:image, product images)
+- Use FULL absolute URLs for images (https://...)
+- Display product images prominently in the video frames
+- Add drop shadows and styling to make images pop
+- If you find multiple products, showcase them
+
 STYLING:
 - Modern Google Fonts (Plus Jakarta Sans, Inter, etc.)
 - Brand colors extracted from the website
-- Gradient backgrounds
+- Gradient backgrounds matching brand
 - CSS animations (fadeIn, slideIn, scale, pulse)
-- Emojis for visual interest
 - Clean, bold typography
+- Product images should be large (400-600px) with animations
 
 ANIMATIONS:
 - Each .frame has opacity:0 by default, .frame.active has opacity:1
 - Include @keyframes for transitions
-- Smooth, professional animations
+- Animate product images: zoom, float, rotate slightly
+- Smooth, professional transitions
 
 CONTENT FLOW:
-1. Hook (attention-grabbing headline)
-2. Problem/Pain points
-3. Solution/Features
-4. Social proof or benefits
-5. Call-to-action
+1. Hook with main product image
+2. Product features/benefits with images
+3. Why choose this product
+4. Social proof or key benefit
+5. Call-to-action with product image
 
 Return ONLY the complete HTML code."""
 
