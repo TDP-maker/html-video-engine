@@ -548,7 +548,8 @@ def detect_product_category(title: str, description: str = "") -> str:
 
     # Footwear keywords
     footwear_keywords = ['shoe', 'sneaker', 'boot', 'sandal', 'heel', 'loafer',
-                        'trainer', 'footwear', 'nike', 'adidas', 'jordan', 'air max']
+                        'trainer', 'footwear', 'nike', 'adidas', 'jordan', 'air max',
+                        'wedge', 'espadrille', 'mule', 'flat', 'pump', 'slipper', 'gia']
 
     # Beauty/Skincare keywords
     beauty_keywords = ['skincare', 'makeup', 'cosmetic', 'serum', 'cream', 'moisturizer',
@@ -957,7 +958,8 @@ async def generate_html_from_url(url: str, prompt: str = "", features: VideoFeat
 
     # Categories where we should KEEP original images (lifestyle shots)
     # These look better with context/environment, not as cutouts
-    lifestyle_categories = ["fashion", "home", "food"]
+    # Footwear added because sandals/shoes on models are lifestyle shots
+    lifestyle_categories = ["fashion", "footwear", "home", "food"]
     is_lifestyle_product = product_category in lifestyle_categories
 
     # Premium feature: Extract brand colors from product image (if enabled)
@@ -1565,24 +1567,28 @@ Return ONLY complete HTML. No explanations."""
     if is_lifestyle_product:
         user_prompt_parts.extend([
             "",
-            "🚨🚨🚨 FASHION/LIFESTYLE MODE - STRICT RULES 🚨🚨🚨",
+            "🚨🚨🚨 LIFESTYLE MODE - ABSOLUTE RULES (VIOLATION = FAILURE) 🚨🚨🚨",
             "",
-            "MANDATORY RULES - FOLLOW EXACTLY:",
+            "⛔ NEVER DO THESE (INSTANT FAIL):",
+            "- NEVER put multiple images in one frame",
+            "- NEVER make images small or resize them",
+            "- NEVER add backgrounds behind images",
+            "- NEVER use .product-wrap or .product-img classes",
+            "- NEVER use .bg-glow or .ai-bg",
+            "- NEVER composite or collage images together",
             "",
-            "1. DIFFERENT IMAGE ON EACH FRAME - Use a different image URL for each frame",
-            "2. FULL-BLEED IMAGES - Image fills ENTIRE 1080x1920, edge-to-edge",
-            "3. ONLY .lifestyle-img CLASS - No .product-wrap, no .product-img",
-            "4. NO BACKGROUNDS - No .bg-glow, no .ai-bg, no extra images behind",
-            "5. ONE HEADLINE PER FRAME - Never stack multiple headlines",
-            "6. SHOP NOW BUTTON ONLY ON FINAL FRAME - Not on other frames",
-            "7. NO TRUST BADGES - Skip entirely for fashion",
-            "8. NO ANIMATIONS on images - Keep them static",
+            "✅ MUST DO (REQUIRED):",
+            "1. ONE image per frame, DIFFERENT image each frame",
+            "2. Image fills 100% width and 100% height (object-fit: cover)",
+            "3. Use ONLY .lifestyle-img class on images",
+            "4. Simple text overlay at bottom with .lifestyle-overlay gradient",
+            "5. CTA button ONLY on final frame",
             "",
-            "FRAME STRUCTURE (copy exactly):",
+            "CORRECT HTML (copy this EXACTLY):",
             '<div class="frame lifestyle active">',
-            '  <img src="[UNIQUE_IMAGE_URL]" class="lifestyle-img">',
+            '  <img src="IMAGE_URL_HERE" class="lifestyle-img">',
             '  <div class="lifestyle-overlay"></div>',
-            '  <div class="text-area"><h1>One Headline</h1></div>',
+            '  <div class="text-area"><h1>Simple Headline</h1></div>',
             '</div>',
             "",
             "USE THE IMAGE MAPPING ABOVE:",
