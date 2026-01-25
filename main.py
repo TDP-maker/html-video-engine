@@ -1109,14 +1109,40 @@ body {{ background: #0a0a0a; }}
 h1 {{
   font-family: 'Inter', sans-serif; font-size: 72px; font-weight: 900;
   color: white; text-transform: uppercase; line-height: 1.1; letter-spacing: -1px;
-  text-shadow: 0 4px 30px rgba(0,0,0,0.5);
+  text-shadow: 0 4px 30px rgba(0,0,0,0.5), 0 0 60px rgba({primary_rgb[0]},{primary_rgb[1]},{primary_rgb[2]},0.3);
 }}
+/* Gradient text using brand colors */
 .text-gradient {{
   background: linear-gradient(135deg, #fff 0%, {accent_color} 50%, #fff 100%);
   -webkit-background-clip: text; -webkit-text-fill-color: transparent;
   background-clip: text;
 }}
+/* Bold gradient - stronger brand color presence */
+.text-gradient-bold {{
+  background: linear-gradient(135deg, {primary_color} 0%, {accent_color} 50%, {secondary_color} 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}}
+/* Brand-colored headline */
+.text-brand {{
+  color: {primary_color};
+  text-shadow: 0 4px 30px rgba(0,0,0,0.5), 0 0 40px rgba({primary_rgb[0]},{primary_rgb[1]},{primary_rgb[2]},0.4);
+}}
+/* Accent colored text */
+.text-accent {{
+  color: {accent_color};
+}}
 p {{ font-family: 'Inter', sans-serif; font-size: 32px; font-weight: 400; color: rgba(255,255,255,0.7); margin-top: 16px; letter-spacing: 1px; }}
+/* Subtitle with brand color */
+p.subtitle-brand {{
+  color: {primary_color};
+  opacity: 0.9;
+}}
+/* Highlighted keywords */
+.highlight {{
+  color: {accent_color};
+  font-weight: 700;
+}}
 
 /* ACCENT ELEMENTS - Using brand colors */
 .accent-line {{ width: 0; height: 4px; background: linear-gradient(90deg, {primary_color}, {secondary_color}); margin: 30px auto 0; border-radius: 2px; }}
@@ -1322,7 +1348,14 @@ p {{ font-family: 'Inter', sans-serif; font-size: 32px; font-weight: 400; color:
 PREMIUM ELEMENTS TO INCLUDE:
 1. Add <div class="bg-glow"></div> as first child of reel-container (animated ambient glow with brand colors)
 {"2. Add <div class='accent-line'></div> after headlines for style (uses brand gradient)" if features.text_effects else ""}
-{"3. Use class='text-gradient' on key words in headlines for gradient text effect" if features.text_effects else ""}
+{"3. TEXT STYLING WITH BRAND COLORS - use these classes to match the product:" if features.text_effects else ""}
+{"   - class='text-gradient' - subtle gradient (white to brand accent)" if features.text_effects else ""}
+{"   - class='text-gradient-bold' - full brand color gradient (primary → accent → secondary)" if features.text_effects else ""}
+{"   - class='text-brand' - solid brand primary color with glow" if features.text_effects else ""}
+{"   - class='text-accent' - brand accent color" if features.text_effects else ""}
+{"   - class='highlight' - accent color for keywords within text" if features.text_effects else ""}
+{"   - p.subtitle-brand - subtitles in brand color" if features.text_effects else ""}
+{"   USE THESE to make text match the product's extracted colors!" if features.text_effects else ""}
 {"4. Add progress bar at top showing video segments" if features.progress_bar else ""}
 {"5. Add <button class='cta-button'>SHOP NOW</button> on the FINAL frame (animated CTA)" if features.cta_button else ""}
 {"6. Add PRICE BADGE when price is available - use this HTML structure:" if features.price_badge else ""}
