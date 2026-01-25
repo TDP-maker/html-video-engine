@@ -87,6 +87,18 @@ class URLVideoRequest(BaseModel):
     record_id: str = ""  # Airtable record ID for tracking
     features: VideoFeatures = VideoFeatures()  # Feature toggles
 
+class PreviewRequest(BaseModel):
+    """Cheap preview mode - generates HTML only, skips expensive APIs"""
+    url: str
+    prompt: str = ""
+    # Creative direction options (these don't add cost)
+    video_style: str = "editorial"       # editorial, dynamic, product_focus, lifestyle
+    mood: str = "luxury"                 # luxury, playful, bold, minimal
+    pacing: str = "balanced"             # slow, balanced, fast
+    font_family: str = "Inter"
+    text_color: str = "#ffffff"
+    accent_color: str = ""
+
 # --- FORMAT CONFIGURATIONS ---
 FORMAT_DIMENSIONS = {
     "reel": (1080, 1920),      # 9:16 - Instagram Reels, TikTok, Stories
@@ -2177,6 +2189,84 @@ async def generate_html_video(request: HTMLVideoRequest, background_tasks: Backg
         "video_id": video_id,
         "format": request.format
     }
+
+@app.post("/preview-from-url")
+async def preview_from_url(request: PreviewRequest, _: bool = Depends(verify_api_key)):
+    """
+    CHEAP PREVIEW MODE - Returns HTML only, no video rendering.
+
+    Cost: ~$0.02-0.04 (GPT-4o only)
+    Skips: DALL-E backgrounds (~$0.04), Remove.bg (~$0.10)
+
+    Use this to let users preview before committing to full video render.
+    Returns HTML that can be displayed in an iframe.
+    """
+    preview_id = str(uuid.uuid4())[:8]
+
+    try:
+        print(f"👁️ [{preview_id}] PREVIEW MODE - Analyzing URL: {request.url}")
+
+        # Create features object with expensive APIs disabled
+        preview_features = VideoFeatures(
+            background_removal=False,      # Skip Remove.bg (~$0.10 saved)
+            ai_background=False,           # Skip DALL-E (~$0.04 saved)
+            color_extraction=True,         # Keep - uses PIL, free
+            cta_button=True,
+            progress_bar=True,
+            text_effects=True,
+            floating_animation=True,
+            ken_burns=True,
+            smart_copy=True,
+            price_badge=True,
+            trust_badges=True,
+            multi_format=False,
+            # User's creative direction choices
+            font_family=request.font_family,
+            text_color=request.text_color,
+            accent_color=request.accent_color,
+            video_style=request.video_style,
+            mood=request.mood,
+            pacing=request.pacing
+        )
+
+        # Generate HTML (only costs ~$0.02-0.04 for GPT-4o)
+        html_content = await generate_html_from_url(request.url, request.prompt, preview_features)
+        print(f"✅ [{preview_id}] Preview HTML generated ({len(html_content)} chars)")
+
+        # Store preview for retrieval
+        video_jobs[preview_id] = {
+            "status": "preview_complete",
+            "html": html_content,
+            "url": request.url
+        }
+
+        # Return HTML directly for iframe embedding
+        return {
+            "message": "Preview generated successfully",
+            "status": "complete",
+            "preview_id": preview_id,
+            "html": html_content,
+            "preview_url": f"/preview/{preview_id}",
+            "url": request.url,
+            "estimated_cost": "$0.02-0.04",
+            "note": "This is a preview. Call /generate-from-url to render full video with AI backgrounds."
+        }
+
+    except Exception as e:
+        print(f"❌ [{preview_id}] Preview error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/preview/{preview_id}", response_class=HTMLResponse)
+async def get_preview(preview_id: str):
+    """Serve preview HTML directly for iframe embedding"""
+    if preview_id not in video_jobs:
+        raise HTTPException(status_code=404, detail="Preview not found")
+
+    job = video_jobs[preview_id]
+    if job.get("status") != "preview_complete":
+        raise HTTPException(status_code=404, detail="Preview not found")
+
+    return HTMLResponse(content=job["html"], status_code=200)
 
 @app.post("/generate-from-url")
 async def generate_from_url(request: URLVideoRequest, background_tasks: BackgroundTasks, _: bool = Depends(verify_api_key)):
