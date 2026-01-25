@@ -5,6 +5,7 @@ import subprocess
 import imageio_ffmpeg
 import httpx
 import base64
+import io
 from fastapi import FastAPI, BackgroundTasks, HTTPException, Header, Depends
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.security import APIKeyHeader
@@ -14,6 +15,8 @@ import uvicorn
 from openai import OpenAI
 import re
 from datetime import datetime
+from PIL import Image
+from collections import Counter
 
 # --- REMOVE.BG BACKGROUND REMOVAL ---
 REMOVE_BG_API_KEY = os.environ.get("REMOVE_BG_API_KEY", "")
@@ -371,16 +374,22 @@ async def process_images_for_premium(product_images: list) -> list:
     return processed
 
 
-async def generate_ai_background(product_title: str, product_category: str = "") -> str:
+async def generate_ai_background(product_title: str, product_category: str = "", brand_colors: dict = None) -> str:
     """Generate an abstract/atmospheric background using DALL-E"""
     try:
         client = OpenAI()
+
+        # Use extracted brand colors if available
+        if brand_colors and brand_colors.get("primary"):
+            color_desc = f"Colors: {brand_colors['primary_name']}, {brand_colors['secondary_name']}, with subtle hints of {brand_colors['accent_name']}."
+        else:
+            color_desc = "Colors: deep purples, dark blues, hints of pink/magenta."
 
         # Create a prompt for abstract background - NO product, just atmosphere
         bg_prompt = f"""Abstract premium background for luxury advertising.
 Dark moody atmosphere with subtle gradients.
 Soft ethereal glow, bokeh light effects, gentle color transitions.
-Colors: deep purples, dark blues, hints of pink/magenta.
+{color_desc}
 Style: cinematic, high-end, minimal, elegant.
 NO products, NO text, NO logos, NO objects - ONLY abstract atmospheric visuals.
 Vertical 9:16 aspect ratio composition."""
@@ -421,6 +430,214 @@ Vertical 9:16 aspect ratio composition."""
         return ""
 
 
+def rgb_to_hex(r: int, g: int, b: int) -> str:
+    """Convert RGB to hex color"""
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
+def hex_to_rgb(hex_color: str) -> tuple:
+    """Convert hex to RGB tuple"""
+    hex_color = hex_color.lstrip('#')
+    return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+
+
+def get_color_name(hex_color: str) -> str:
+    """Get a descriptive name for a color based on its hue"""
+    r, g, b = hex_to_rgb(hex_color)
+
+    # Calculate brightness
+    brightness = (r * 299 + g * 587 + b * 114) / 1000
+
+    # Determine if it's a neutral color
+    max_rgb = max(r, g, b)
+    min_rgb = min(r, g, b)
+    saturation = (max_rgb - min_rgb) / max_rgb if max_rgb > 0 else 0
+
+    if saturation < 0.15:
+        if brightness < 50:
+            return "deep black"
+        elif brightness < 128:
+            return "dark gray"
+        elif brightness < 200:
+            return "light gray"
+        else:
+            return "white"
+
+    # Calculate hue
+    if max_rgb == min_rgb:
+        hue = 0
+    elif max_rgb == r:
+        hue = 60 * ((g - b) / (max_rgb - min_rgb)) % 360
+    elif max_rgb == g:
+        hue = 60 * ((b - r) / (max_rgb - min_rgb)) + 120
+    else:
+        hue = 60 * ((r - g) / (max_rgb - min_rgb)) + 240
+
+    # Map hue to color name
+    if hue < 15 or hue >= 345:
+        base = "red"
+    elif hue < 45:
+        base = "orange"
+    elif hue < 75:
+        base = "yellow"
+    elif hue < 150:
+        base = "green"
+    elif hue < 195:
+        base = "cyan"
+    elif hue < 255:
+        base = "blue"
+    elif hue < 285:
+        base = "purple"
+    elif hue < 345:
+        base = "pink"
+    else:
+        base = "red"
+
+    # Add brightness modifier
+    if brightness < 80:
+        return f"deep {base}"
+    elif brightness > 180:
+        return f"light {base}"
+    else:
+        return base
+
+
+def adjust_color_for_dark_bg(hex_color: str, min_brightness: int = 120) -> str:
+    """Adjust a color to ensure visibility on dark backgrounds"""
+    r, g, b = hex_to_rgb(hex_color)
+    brightness = (r * 299 + g * 587 + b * 114) / 1000
+
+    if brightness < min_brightness:
+        # Lighten the color while preserving hue
+        factor = min_brightness / max(brightness, 1)
+        r = min(255, int(r * factor))
+        g = min(255, int(g * factor))
+        b = min(255, int(b * factor))
+
+    return rgb_to_hex(r, g, b)
+
+
+async def extract_colors_from_image(image_url: str) -> dict:
+    """Extract dominant colors from a product image using k-means clustering"""
+    try:
+        print(f"🎨 Extracting colors from image...")
+
+        # Download image
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.get(image_url)
+            if response.status_code != 200:
+                print(f"⚠️ Failed to download image for color extraction")
+                return None
+
+            image_data = response.content
+
+        # Open and process image
+        img = Image.open(io.BytesIO(image_data))
+        img = img.convert('RGB')
+
+        # Resize for faster processing
+        img.thumbnail((150, 150))
+
+        # Get all pixels
+        pixels = list(img.getdata())
+
+        # Filter out near-white and near-black pixels (background)
+        filtered_pixels = []
+        for r, g, b in pixels:
+            brightness = (r * 299 + g * 587 + b * 114) / 1000
+            saturation = (max(r, g, b) - min(r, g, b)) / max(max(r, g, b), 1)
+
+            # Skip very dark, very light, or very unsaturated pixels
+            if 30 < brightness < 240 and saturation > 0.1:
+                # Quantize to reduce color variations (round to nearest 16)
+                r = (r // 16) * 16
+                g = (g // 16) * 16
+                b = (b // 16) * 16
+                filtered_pixels.append((r, g, b))
+
+        if len(filtered_pixels) < 10:
+            # Not enough colorful pixels, use all pixels
+            filtered_pixels = [(
+                (r // 16) * 16,
+                (g // 16) * 16,
+                (b // 16) * 16
+            ) for r, g, b in pixels]
+
+        # Count pixel frequencies
+        color_counts = Counter(filtered_pixels)
+
+        # Get top colors
+        top_colors = color_counts.most_common(10)
+
+        if not top_colors:
+            print(f"⚠️ No colors extracted")
+            return None
+
+        # Select distinct colors (not too similar to each other)
+        selected_colors = []
+        for color, count in top_colors:
+            if len(selected_colors) >= 3:
+                break
+
+            # Check if this color is distinct from already selected
+            is_distinct = True
+            for selected in selected_colors:
+                # Calculate color distance
+                dist = sum(abs(a - b) for a, b in zip(color, selected))
+                if dist < 100:  # Too similar
+                    is_distinct = False
+                    break
+
+            if is_distinct:
+                selected_colors.append(color)
+
+        # Ensure we have at least 3 colors (use variations if needed)
+        while len(selected_colors) < 3:
+            if selected_colors:
+                # Create a variation of the first color
+                r, g, b = selected_colors[0]
+                if len(selected_colors) == 1:
+                    # Complementary-ish color
+                    selected_colors.append((255 - r, 255 - g, 255 - b))
+                else:
+                    # Shifted hue
+                    selected_colors.append((g, b, r))
+            else:
+                # Fallback to default purple/pink theme
+                selected_colors = [(99, 102, 241), (236, 72, 153), (139, 92, 246)]
+                break
+
+        # Convert to hex and adjust for dark backgrounds
+        primary_hex = rgb_to_hex(*selected_colors[0])
+        secondary_hex = rgb_to_hex(*selected_colors[1])
+        accent_hex = rgb_to_hex(*selected_colors[2])
+
+        # Adjust colors for visibility on dark background
+        primary_adjusted = adjust_color_for_dark_bg(primary_hex)
+        secondary_adjusted = adjust_color_for_dark_bg(secondary_hex)
+        accent_adjusted = adjust_color_for_dark_bg(accent_hex)
+
+        result = {
+            "primary": primary_adjusted,
+            "secondary": secondary_adjusted,
+            "accent": accent_adjusted,
+            "primary_name": get_color_name(primary_adjusted),
+            "secondary_name": get_color_name(secondary_adjusted),
+            "accent_name": get_color_name(accent_adjusted),
+            "original_primary": primary_hex,
+            "original_secondary": secondary_hex,
+            "original_accent": accent_hex
+        }
+
+        print(f"✅ Extracted colors: {result['primary_name']} ({result['primary']}), {result['secondary_name']} ({result['secondary']}), {result['accent_name']} ({result['accent']})")
+
+        return result
+
+    except Exception as e:
+        print(f"⚠️ Color extraction failed: {e}")
+        return None
+
+
 async def generate_html_from_url(url: str, prompt: str = "") -> str:
     """Use Playwright + OpenAI to generate HTML video content from a URL"""
 
@@ -428,16 +645,21 @@ async def generate_html_from_url(url: str, prompt: str = "") -> str:
     product_images, page_title, page_description = await extract_images_with_playwright(url)
     print(f"📸 Found {len(product_images)} product images")
 
+    # Premium feature: Extract brand colors from product image
+    brand_colors = None
+    if product_images:
+        brand_colors = await extract_colors_from_image(product_images[0])
+
     # Premium feature: Remove backgrounds if API key is set
     if REMOVE_BG_API_KEY and product_images:
         print(f"🎨 Removing backgrounds (premium mode)...")
         product_images = await process_images_for_premium(product_images)
         print(f"✅ Background removal complete")
 
-    # Premium feature: Generate AI background
+    # Premium feature: Generate AI background with brand colors
     ai_background_url = ""
     try:
-        ai_background_url = await generate_ai_background(page_title)
+        ai_background_url = await generate_ai_background(page_title, "", brand_colors)
     except Exception as e:
         print(f"⚠️ Skipping AI background: {e}")
 
@@ -452,7 +674,28 @@ async def generate_html_from_url(url: str, prompt: str = "") -> str:
 
     client = OpenAI()
 
-    system_prompt = """You are a premium video ad designer. Create cinematic Instagram Reel HTML videos.
+    # Set up dynamic colors - use extracted brand colors or defaults
+    if brand_colors:
+        primary_color = brand_colors["primary"]
+        secondary_color = brand_colors["secondary"]
+        accent_color = brand_colors["accent"]
+        primary_rgb = hex_to_rgb(primary_color)
+        secondary_rgb = hex_to_rgb(secondary_color)
+        accent_rgb = hex_to_rgb(accent_color)
+        color_description = f"Brand colors extracted: {brand_colors['primary_name']} ({primary_color}), {brand_colors['secondary_name']} ({secondary_color}), {brand_colors['accent_name']} ({accent_color})"
+    else:
+        # Default purple/pink theme
+        primary_color = "#6366f1"
+        secondary_color = "#ec4899"
+        accent_color = "#8b5cf6"
+        primary_rgb = (99, 102, 241)
+        secondary_rgb = (236, 72, 153)
+        accent_rgb = (139, 92, 246)
+        color_description = "Using default theme colors"
+
+    print(f"🎨 {color_description}")
+
+    system_prompt = f"""You are a premium video ad designer. Create cinematic Instagram Reel HTML videos.
 
 ⚠️ INSTAGRAM SAFE ZONES - CRITICAL:
 - TOP 250px: Username/follow button overlay - NO important content
@@ -460,114 +703,119 @@ async def generate_html_from_url(url: str, prompt: str = "") -> str:
 - RIGHT 150px: Like/comment/share buttons - keep content left of this
 - SAFE AREA: Content should be within x:0-930px, y:250-1520px
 
-MANDATORY STRUCTURE (copy this exactly):
+🎨 BRAND COLORS (USE THESE THROUGHOUT):
+- Primary: {primary_color} (for main glows, shadows)
+- Secondary: {secondary_color} (for accent glows, gradients)
+- Accent: {accent_color} (for text gradients, highlights)
+
+MANDATORY STRUCTURE (copy this exactly, using the brand colors):
 ```
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
-* { margin: 0; padding: 0; box-sizing: border-box; }
+* {{ margin: 0; padding: 0; box-sizing: border-box; }}
 
-/* ANIMATED GRADIENT BACKGROUND */
-body { background: #0a0a0a; }
-.reel-container {
+/* ANIMATED GRADIENT BACKGROUND - Using brand colors */
+body {{ background: #0a0a0a; }}
+.reel-container {{
   width: 1080px; height: 1920px; position: relative; overflow: hidden;
   background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%);
-}
-.bg-glow {
+}}
+.bg-glow {{
   position: absolute; width: 150%; height: 150%; top: -25%; left: -25%;
-  background: radial-gradient(circle at 30% 20%, rgba(99,102,241,0.15) 0%, transparent 50%),
-              radial-gradient(circle at 70% 80%, rgba(236,72,153,0.1) 0%, transparent 50%);
+  background: radial-gradient(circle at 30% 20%, rgba({primary_rgb[0]},{primary_rgb[1]},{primary_rgb[2]},0.15) 0%, transparent 50%),
+              radial-gradient(circle at 70% 80%, rgba({secondary_rgb[0]},{secondary_rgb[1]},{secondary_rgb[2]},0.1) 0%, transparent 50%);
   animation: glowMove 8s ease-in-out infinite;
-}
-@keyframes glowMove {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(30px, -30px) scale(1.1); }
-}
+}}
+@keyframes glowMove {{
+  0%, 100% {{ transform: translate(0, 0) scale(1); }}
+  50% {{ transform: translate(30px, -30px) scale(1.1); }}
+}}
 
 /* FRAME TRANSITIONS - Products can fill entire frame */
-.frame { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0; transition: opacity 1s ease-in-out; }
-.frame.active { opacity: 1; transition: opacity 1s ease-in-out; }
-.frame.exit { opacity: 0; transition: opacity 1s ease-in-out; }
+.frame {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0; transition: opacity 1s ease-in-out; }}
+.frame.active {{ opacity: 1; transition: opacity 1s ease-in-out; }}
+.frame.exit {{ opacity: 0; transition: opacity 1s ease-in-out; }}
 
 /* Safe zone helper - balanced vertical distribution */
-.safe-zone { position: absolute; top: 200px; left: 80px; right: 180px; bottom: 350px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; }
-.content-area { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; }
+.safe-zone {{ position: absolute; top: 200px; left: 80px; right: 180px; bottom: 350px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; }}
+.content-area {{ flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; }}
 
 /* PRODUCT ANIMATIONS */
-.frame.active .product-wrap { animation: floatIn 1s cubic-bezier(0.34, 1.56, 0.64, 1) forwards, float 4s ease-in-out 1s infinite; }
-.frame.active .text-area { animation: fadeUp 0.8s ease-out 0.4s forwards; opacity: 0; }
-.frame.active .lifestyle-img { animation: zoomIn 1.2s ease-out forwards; }
-.frame.active .accent-line { animation: lineGrow 0.6s ease-out 0.6s forwards; }
+.frame.active .product-wrap {{ animation: floatIn 1s cubic-bezier(0.34, 1.56, 0.64, 1) forwards, float 4s ease-in-out 1s infinite; }}
+.frame.active .text-area {{ animation: fadeUp 0.8s ease-out 0.4s forwards; opacity: 0; }}
+.frame.active .lifestyle-img {{ animation: zoomIn 1.2s ease-out forwards; }}
+.frame.active .accent-line {{ animation: lineGrow 0.6s ease-out 0.6s forwards; }}
 
-/* PRODUCT TREATMENT - Premium floating product with glow */
-.product-wrap { position: relative; transform: scale(0.9) translateY(20px); opacity: 0; z-index: 1; }
-.product-wrap::before {
+/* PRODUCT TREATMENT - Premium floating product with brand-colored glow */
+.product-wrap {{ position: relative; transform: scale(0.9) translateY(20px); opacity: 0; z-index: 1; }}
+.product-wrap::before {{
   content: ''; position: absolute; top: 50%; left: 50%;
   transform: translate(-50%, -50%); width: 120%; height: 120%;
-  background: radial-gradient(ellipse at center, rgba(99,102,241,0.2) 0%, rgba(236,72,153,0.1) 40%, transparent 70%);
+  background: radial-gradient(ellipse at center, rgba({primary_rgb[0]},{primary_rgb[1]},{primary_rgb[2]},0.2) 0%, rgba({secondary_rgb[0]},{secondary_rgb[1]},{secondary_rgb[2]},0.1) 40%, transparent 70%);
   z-index: -1; border-radius: 50%;
   filter: blur(40px);
-}
-.product-img { width: 950px; height: auto; max-height: 1200px; object-fit: contain; filter: drop-shadow(0 30px 60px rgba(0,0,0,0.5)) drop-shadow(0 0 100px rgba(99,102,241,0.3)); }
+}}
+.product-img {{ width: 950px; height: auto; max-height: 1200px; object-fit: contain; filter: drop-shadow(0 30px 60px rgba(0,0,0,0.5)) drop-shadow(0 0 100px rgba({primary_rgb[0]},{primary_rgb[1]},{primary_rgb[2]},0.3)); }}
 
 /* LIFESTYLE TREATMENT - Full bleed, edge to edge */
-.frame.lifestyle { padding: 0 !important; }
-.lifestyle-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transform: scale(1.05); }
-.lifestyle-overlay { position: absolute; bottom: 0; left: 0; width: 100%; height: 60%; background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.6) 40%, transparent 100%); z-index: 1; }
+.frame.lifestyle {{ padding: 0 !important; }}
+.lifestyle-img {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transform: scale(1.05); }}
+.lifestyle-overlay {{ position: absolute; bottom: 0; left: 0; width: 100%; height: 60%; background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.6) 40%, transparent 100%); z-index: 1; }}
 
 /* AI BACKGROUND TREATMENT - Cinematic atmosphere */
-.ai-bg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.6; z-index: 0; }
-.frame.ai-background .ai-bg { animation: bgPulse 6s ease-in-out infinite; }
-@keyframes bgPulse { 0%, 100% { transform: scale(1); opacity: 0.6; } 50% { transform: scale(1.05); opacity: 0.7; } }
+.ai-bg {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.6; z-index: 0; }}
+.frame.ai-background .ai-bg {{ animation: bgPulse 6s ease-in-out infinite; }}
+@keyframes bgPulse {{ 0%, 100% {{ transform: scale(1); opacity: 0.6; }} 50% {{ transform: scale(1.05); opacity: 0.7; }} }}
 
 /* PREMIUM TEXT STYLING - 15% from bottom (288px), above Instagram UI */
-.text-area { position: absolute; bottom: 300px; left: 0; text-align: center; width: 100%; padding: 0 120px; padding-right: 200px; transform: translateY(30px); z-index: 10; }
-h1 {
+.text-area {{ position: absolute; bottom: 300px; left: 0; text-align: center; width: 100%; padding: 0 120px; padding-right: 200px; transform: translateY(30px); z-index: 10; }}
+h1 {{
   font-family: 'Inter', sans-serif; font-size: 72px; font-weight: 900;
   color: white; text-transform: uppercase; line-height: 1.1; letter-spacing: -1px;
   text-shadow: 0 4px 30px rgba(0,0,0,0.5);
-}
-.text-gradient {
-  background: linear-gradient(135deg, #fff 0%, #a5b4fc 50%, #fff 100%);
+}}
+.text-gradient {{
+  background: linear-gradient(135deg, #fff 0%, {accent_color} 50%, #fff 100%);
   -webkit-background-clip: text; -webkit-text-fill-color: transparent;
   background-clip: text;
-}
-p { font-family: 'Inter', sans-serif; font-size: 32px; font-weight: 400; color: rgba(255,255,255,0.7); margin-top: 16px; letter-spacing: 1px; }
+}}
+p {{ font-family: 'Inter', sans-serif; font-size: 32px; font-weight: 400; color: rgba(255,255,255,0.7); margin-top: 16px; letter-spacing: 1px; }}
 
-/* ACCENT ELEMENTS */
-.accent-line { width: 0; height: 4px; background: linear-gradient(90deg, #6366f1, #ec4899); margin: 30px auto 0; border-radius: 2px; }
-@keyframes lineGrow { 0% { width: 0; } 100% { width: 120px; } }
+/* ACCENT ELEMENTS - Using brand colors */
+.accent-line {{ width: 0; height: 4px; background: linear-gradient(90deg, {primary_color}, {secondary_color}); margin: 30px auto 0; border-radius: 2px; }}
+@keyframes lineGrow {{ 0% {{ width: 0; }} 100% {{ width: 120px; }} }}
 
 /* PROGRESS BAR (top of screen) */
-.progress-bar { position: absolute; top: 60px; left: 80px; right: 80px; height: 4px; background: rgba(255,255,255,0.2); border-radius: 2px; z-index: 100; display: flex; gap: 8px; }
-.progress-segment { flex: 1; height: 100%; background: rgba(255,255,255,0.3); border-radius: 2px; overflow: hidden; }
-.progress-segment.active::after { content: ''; display: block; height: 100%; background: white; animation: progressFill var(--duration, 3s) linear forwards; }
-.progress-segment.done { background: white; }
-@keyframes progressFill { 0% { width: 0; } 100% { width: 100%; } }
+.progress-bar {{ position: absolute; top: 60px; left: 80px; right: 80px; height: 4px; background: rgba(255,255,255,0.2); border-radius: 2px; z-index: 100; display: flex; gap: 8px; }}
+.progress-segment {{ flex: 1; height: 100%; background: rgba(255,255,255,0.3); border-radius: 2px; overflow: hidden; }}
+.progress-segment.active::after {{ content: ''; display: block; height: 100%; background: white; animation: progressFill var(--duration, 3s) linear forwards; }}
+.progress-segment.done {{ background: white; }}
+@keyframes progressFill {{ 0% {{ width: 0; }} 100% {{ width: 100%; }} }}
 
 /* KEYFRAMES */
-@keyframes floatIn {
-  0% { opacity: 0; transform: scale(0.85) translateY(40px); }
-  100% { opacity: 1; transform: scale(1) translateY(0); }
-}
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-12px); }
-}
-@keyframes fadeUp {
-  0% { opacity: 0; transform: translateY(30px); }
-  100% { opacity: 1; transform: translateY(0); }
-}
-@keyframes zoomIn {
-  0% { opacity: 0; transform: scale(1.08); }
-  100% { opacity: 1; transform: scale(1); }
-}
+@keyframes floatIn {{
+  0% {{ opacity: 0; transform: scale(0.85) translateY(40px); }}
+  100% {{ opacity: 1; transform: scale(1) translateY(0); }}
+}}
+@keyframes float {{
+  0%, 100% {{ transform: translateY(0); }}
+  50% {{ transform: translateY(-12px); }}
+}}
+@keyframes fadeUp {{
+  0% {{ opacity: 0; transform: translateY(30px); }}
+  100% {{ opacity: 1; transform: translateY(0); }}
+}}
+@keyframes zoomIn {{
+  0% {{ opacity: 0; transform: scale(1.08); }}
+  100% {{ opacity: 1; transform: scale(1); }}
+}}
 </style>
 ```
 
 PREMIUM ELEMENTS TO INCLUDE:
-1. Add <div class="bg-glow"></div> as first child of reel-container (animated ambient glow)
-2. Add <div class="accent-line"></div> after headlines for style
-3. Use class="text-gradient" on key words in headlines for gradient text effect
+1. Add <div class="bg-glow"></div> as first child of reel-container (animated ambient glow with brand colors)
+2. Add <div class="accent-line"></div> after headlines for style (uses brand gradient)
+3. Use class="text-gradient" on key words in headlines for gradient text effect (uses brand accent color)
 4. Add progress bar at top showing video segments
 
 IMAGE TREATMENT - CHOOSE BASED ON IMAGE TYPE:
@@ -613,12 +861,18 @@ Return ONLY complete HTML. No explanations."""
     # AI background info
     bg_info = f"\nAI BACKGROUND (use as .ai-bg src): {ai_background_url}" if ai_background_url else ""
 
+    # Color info for user prompt
+    color_info = ""
+    if brand_colors:
+        color_info = f"\n🎨 BRAND COLORS EXTRACTED FROM PRODUCT:\n- Primary: {brand_colors['primary']} ({brand_colors['primary_name']})\n- Secondary: {brand_colors['secondary']} ({brand_colors['secondary_name']})\n- Accent: {brand_colors['accent']} ({brand_colors['accent_name']})\nUse these colors for all glows, gradients, and accents to match the product!"
+
     user_prompt = f"""Product: {page_title}
 URL: {url}
 
 IMAGES (use these exact URLs):
 {images_text}
 {bg_info}
+{color_info}
 
 {f"EXTRA: {prompt}" if prompt else ""}
 
