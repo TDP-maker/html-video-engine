@@ -1069,6 +1069,27 @@ body {{ background: #0a0a0a; }}
   width: 1080px; height: 1920px; position: relative; overflow: hidden;
   background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%);
 }}
+
+/* CINEMATIC VIGNETTE - Darker edges like film */
+.vignette {{
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.5) 100%);
+  z-index: 50; pointer-events: none;
+}}
+
+/* FILM GRAIN OVERLAY - Subtle texture */
+.film-grain {{
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  opacity: 0.03; z-index: 51; pointer-events: none; mix-blend-mode: overlay;
+}}
+
+/* CINEMATIC COLOR GRADE */
+.color-grade {{
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  background: linear-gradient(180deg, rgba(255,200,150,0.03) 0%, transparent 50%, rgba(100,150,255,0.03) 100%);
+  z-index: 52; pointer-events: none; mix-blend-mode: color;
+}}
 .bg-glow {{
   position: absolute; width: 150%; height: 150%; top: -25%; left: -25%;
   background: radial-gradient(circle at 30% 20%, rgba({primary_rgb[0]},{primary_rgb[1]},{primary_rgb[2]},0.15) 0%, transparent 50%),
@@ -1359,18 +1380,40 @@ p.subtitle-brand {{
   50% {{ transform: translateY(-6px); }}
 }}
 @keyframes fadeUp {{
-  0% {{ opacity: 0; transform: translateY(30px); }}
-  100% {{ opacity: 1; transform: translateY(0); }}
+  0% {{ opacity: 0; transform: translateY(40px); filter: blur(4px); }}
+  100% {{ opacity: 1; transform: translateY(0); filter: blur(0); }}
 }}
 @keyframes zoomIn {{
   0% {{ opacity: 0; transform: scale(1.03); }}
   100% {{ opacity: 1; transform: scale(1); }}
 }}
+/* CINEMATIC TEXT REVEAL - Slide up with mask */
+@keyframes slideReveal {{
+  0% {{ clip-path: inset(100% 0 0 0); transform: translateY(20px); }}
+  100% {{ clip-path: inset(0 0 0 0); transform: translateY(0); }}
+}}
+.text-reveal {{ animation: slideReveal 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }}
+
+/* LIGHT LEAK - Subtle flare on transitions */
+@keyframes lightLeak {{
+  0% {{ opacity: 0; transform: translateX(-100%); }}
+  50% {{ opacity: 0.3; }}
+  100% {{ opacity: 0; transform: translateX(100%); }}
+}}
+.light-leak {{
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,200,150,0.4), rgba(255,255,255,0.2), transparent);
+  z-index: 45; pointer-events: none; opacity: 0;
+}}
+.frame.active .light-leak {{ animation: lightLeak 1.5s ease-out forwards; }}
 </style>
 ```
 
 PREMIUM ELEMENTS TO INCLUDE:
-1. Add <div class="bg-glow"></div> as first child of reel-container (animated ambient glow with brand colors)
+1. Add cinematic overlays as LAST children of reel-container:
+   <div class="vignette"></div>
+   <div class="film-grain"></div>
+   <div class="color-grade"></div>
 {"2. Add <div class='accent-line'></div> after headlines for style (uses brand gradient)" if features.text_effects else ""}
 {"3. TEXT STYLING WITH BRAND COLORS - use these classes to match the product:" if features.text_effects else ""}
 {"   - class='text-gradient' - subtle gradient (white to brand accent)" if features.text_effects else ""}
