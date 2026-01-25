@@ -5,7 +5,7 @@ import subprocess
 import imageio_ffmpeg
 import httpx
 from fastapi import FastAPI, BackgroundTasks, HTTPException, Header, Depends
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 from playwright.async_api import async_playwright
@@ -465,20 +465,137 @@ Remember: Image ABOVE (900px wide, centered), text BELOW in text-area div. Dark 
 
 # --- API ENDPOINTS ---
 
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 async def home():
-    return {
-        "status": "Online",
-        "message": "HTML Video Engine",
-        "endpoints": {
-            "/generate": "POST - Template video",
-            "/generate-html": "POST - Video from custom HTML",
-            "/generate-from-url": "POST - AI generates video from URL",
-            "/status/{video_id}": "GET - Check video status",
-            "/download/{video_id}": "GET - Download specific video",
-            "/download": "GET - Download latest video"
+    return """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Engine</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', -apple-system, sans-serif; background: #0a0a0a; color: white; min-height: 100vh; padding: 60px 20px; }
+        .container { max-width: 600px; margin: 0 auto; }
+        h1 { font-size: 32px; font-weight: 700; margin-bottom: 8px; }
+        .subtitle { color: #888; margin-bottom: 40px; }
+        label { display: block; font-size: 14px; color: #888; margin-bottom: 8px; }
+        input { width: 100%; padding: 16px; font-size: 16px; border: 1px solid #333; border-radius: 8px; background: #111; color: white; margin-bottom: 20px; }
+        input:focus { outline: none; border-color: #6366f1; }
+        button { width: 100%; padding: 16px; font-size: 16px; font-weight: 600; border: none; border-radius: 8px; background: linear-gradient(135deg, #6366f1, #ec4899); color: white; cursor: pointer; transition: transform 0.2s, opacity 0.2s; }
+        button:hover { transform: translateY(-2px); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .status { margin-top: 30px; padding: 20px; border-radius: 8px; background: #111; border: 1px solid #222; }
+        .status.hidden { display: none; }
+        .progress-bar { height: 4px; background: #333; border-radius: 2px; margin: 15px 0; overflow: hidden; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, #6366f1, #ec4899); width: 0%; transition: width 0.3s; }
+        .download-btn { display: inline-block; margin-top: 15px; padding: 12px 24px; background: #22c55e; border-radius: 6px; color: white; text-decoration: none; font-weight: 600; }
+        .download-btn:hover { background: #16a34a; }
+        .error { color: #ef4444; }
+        .api-info { margin-top: 60px; padding-top: 30px; border-top: 1px solid #222; }
+        .api-info h3 { font-size: 16px; margin-bottom: 15px; }
+        code { background: #1a1a1a; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Video Engine</h1>
+        <p class="subtitle">Generate premium product videos from any URL</p>
+
+        <form id="generateForm">
+            <label>Product URL</label>
+            <input type="url" id="urlInput" placeholder="https://www.nike.com/t/air-max-90-mens-shoes" required>
+
+            <label>Custom Instructions (optional)</label>
+            <input type="text" id="promptInput" placeholder="Focus on comfort features...">
+
+            <button type="submit" id="submitBtn">Generate Video</button>
+        </form>
+
+        <div id="status" class="status hidden">
+            <div id="statusText">Starting...</div>
+            <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+            <div id="downloadArea"></div>
+        </div>
+
+        <div class="api-info">
+            <h3>API Endpoints</h3>
+            <p><code>POST /generate-from-url</code> - Generate video from URL</p>
+            <p><code>GET /status/{video_id}</code> - Check progress</p>
+            <p><code>GET /download/{video_id}</code> - Download video</p>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('generateForm');
+        const statusDiv = document.getElementById('status');
+        const statusText = document.getElementById('statusText');
+        const progressFill = document.getElementById('progressFill');
+        const downloadArea = document.getElementById('downloadArea');
+        const submitBtn = document.getElementById('submitBtn');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const url = document.getElementById('urlInput').value;
+            const prompt = document.getElementById('promptInput').value;
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Generating...';
+            statusDiv.classList.remove('hidden');
+            statusText.textContent = 'Starting video generation...';
+            progressFill.style.width = '0%';
+            downloadArea.innerHTML = '';
+
+            try {
+                const res = await fetch('/generate-from-url', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url, prompt })
+                });
+                const data = await res.json();
+
+                if (data.video_id) {
+                    pollStatus(data.video_id);
+                } else {
+                    throw new Error(data.detail || 'Failed to start');
+                }
+            } catch (err) {
+                statusText.innerHTML = '<span class="error">Error: ' + err.message + '</span>';
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Generate Video';
+            }
+        });
+
+        async function pollStatus(videoId) {
+            try {
+                const res = await fetch('/status/' + videoId);
+                const data = await res.json();
+
+                progressFill.style.width = data.progress + '%';
+
+                if (data.status === 'complete') {
+                    statusText.textContent = 'Video ready!';
+                    progressFill.style.width = '100%';
+                    downloadArea.innerHTML = '<a href="/download/' + videoId + '" class="download-btn" download>Download Video</a>';
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Generate Another';
+                } else if (data.status === 'error') {
+                    statusText.innerHTML = '<span class="error">Error: ' + data.error + '</span>';
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Try Again';
+                } else {
+                    statusText.textContent = 'Generating... ' + data.status + ' (' + data.progress + '%)';
+                    setTimeout(() => pollStatus(videoId), 1500);
+                }
+            } catch (err) {
+                setTimeout(() => pollStatus(videoId), 2000);
+            }
         }
-    }
+    </script>
+</body>
+</html>
+"""
 
 @app.post("/generate")
 async def generate(brief: VideoBrief, background_tasks: BackgroundTasks, _: bool = Depends(verify_api_key)):
