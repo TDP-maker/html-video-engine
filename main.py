@@ -74,11 +74,11 @@ class VideoFeatures(BaseModel):
     font_family: str = "Inter"           # Font for headlines
     text_color: str = "#ffffff"          # Main text color
     accent_color: str = ""               # Accent color (empty = use extracted)
-    # Creative direction
-    video_style: str = "editorial"       # editorial, dynamic, product_focus, lifestyle
-    mood: str = "luxury"                 # luxury, playful, bold, minimal
-    pacing: str = "balanced"             # slow, balanced, fast
-    transition: str = "fade"             # fade, slide, zoom, blur, wipe
+    # Creative direction - "auto" = smart defaults based on category + price
+    video_style: str = "auto"            # auto, editorial, dynamic, product_focus, lifestyle
+    mood: str = "auto"                   # auto, luxury, playful, bold, minimal
+    pacing: str = "auto"                 # auto, slow, balanced, fast
+    transition: str = "auto"             # auto, fade, slide, zoom, blur, wipe
     # AI Copywriting - let AI create compelling copy instead of using stale page text
     ai_copywriting: bool = True          # Generate marketing headlines (default ON)
     # Custom copy overrides (user can edit these after preview)
@@ -100,11 +100,11 @@ class PreviewRequest(BaseModel):
     """Cheap preview mode - generates HTML only, skips expensive APIs"""
     url: str
     prompt: str = ""
-    # Creative direction options (these don't add cost)
-    video_style: str = "editorial"       # editorial, dynamic, product_focus, lifestyle
-    mood: str = "luxury"                 # luxury, playful, bold, minimal
-    pacing: str = "balanced"             # slow, balanced, fast
-    transition: str = "fade"             # fade, slide, zoom, blur, wipe
+    # Creative direction options - "auto" = smart defaults based on category + price
+    video_style: str = "auto"            # auto, editorial, dynamic, product_focus, lifestyle
+    mood: str = "auto"                   # auto, luxury, playful, bold, minimal
+    pacing: str = "auto"                 # auto, slow, balanced, fast
+    transition: str = "auto"             # auto, fade, slide, zoom, blur, wipe
     font_family: str = "Inter"
     text_color: str = "#ffffff"
     accent_color: str = ""
@@ -761,6 +761,137 @@ def detect_product_category(title: str, description: str = "") -> str:
         return "general"
 
 
+def parse_price_value(price_str: str) -> float:
+    """Extract numeric value from price string (e.g., '$149.99' -> 149.99)"""
+    if not price_str:
+        return 0.0
+    # Remove currency symbols and whitespace, handle comma separators
+    cleaned = re.sub(r'[^\d.,]', '', price_str)
+    # Handle European format (1.234,56) vs US format (1,234.56)
+    if ',' in cleaned and '.' in cleaned:
+        if cleaned.index(',') > cleaned.index('.'):
+            # European: 1.234,56
+            cleaned = cleaned.replace('.', '').replace(',', '.')
+        else:
+            # US: 1,234.56
+            cleaned = cleaned.replace(',', '')
+    elif ',' in cleaned:
+        # Could be European decimal or US thousands separator
+        # If comma is near end with 2 digits after, treat as decimal
+        if re.search(r',\d{2}$', cleaned):
+            cleaned = cleaned.replace(',', '.')
+        else:
+            cleaned = cleaned.replace(',', '')
+    try:
+        return float(cleaned)
+    except ValueError:
+        return 0.0
+
+
+def get_smart_defaults(category: str, price: str = "") -> dict:
+    """
+    Auto-select optimal video style, mood, pacing, and transition based on:
+    - Product category (detected from title/description)
+    - Price point (premium vs budget positioning)
+
+    Returns dict with: video_style, mood, pacing, transition
+    """
+    price_value = parse_price_value(price)
+
+    # Determine price tier (thresholds in USD-equivalent)
+    # Premium: > $100, Mid: $30-100, Budget: < $30
+    is_premium = price_value > 100
+    is_budget = price_value > 0 and price_value < 30
+
+    # Category-specific defaults optimized for best output
+    category_defaults = {
+        "party": {
+            # Party/celebration = fun, energetic, festive
+            "video_style": "dynamic",
+            "mood": "playful",
+            "pacing": "fast",
+            "transition": "slide"
+        },
+        "fashion": {
+            # Fashion = sophisticated, editorial, let clothes breathe
+            "video_style": "editorial",
+            "mood": "luxury",
+            "pacing": "balanced",
+            "transition": "fade"
+        },
+        "footwear": {
+            # Footwear = streetwear energy, bold, dynamic
+            "video_style": "dynamic",
+            "mood": "bold",
+            "pacing": "balanced",
+            "transition": "slide"
+        },
+        "beauty": {
+            # Beauty = soft, luxurious, spa-like, dreamy
+            "video_style": "lifestyle",
+            "mood": "luxury",
+            "pacing": "slow",
+            "transition": "blur"
+        },
+        "tech": {
+            # Tech = clean, minimal, Apple-esque, product-focused
+            "video_style": "product_focus",
+            "mood": "minimal",
+            "pacing": "balanced",
+            "transition": "zoom"
+        },
+        "food": {
+            # Food = warm, appetizing, lifestyle context
+            "video_style": "lifestyle",
+            "mood": "playful",
+            "pacing": "slow",
+            "transition": "fade"
+        },
+        "home": {
+            # Home/furniture = architectural, minimal, lifestyle
+            "video_style": "lifestyle",
+            "mood": "minimal",
+            "pacing": "slow",
+            "transition": "fade"
+        },
+        "general": {
+            # Safe defaults that work for most products
+            "video_style": "editorial",
+            "mood": "luxury",
+            "pacing": "balanced",
+            "transition": "fade"
+        }
+    }
+
+    # Get base defaults for category
+    defaults = category_defaults.get(category, category_defaults["general"]).copy()
+
+    # Price-based adjustments
+    if is_premium:
+        # Premium products → slower, more luxurious feel
+        if defaults["mood"] not in ["luxury", "minimal"]:
+            defaults["mood"] = "luxury"
+        if defaults["pacing"] == "fast":
+            defaults["pacing"] = "balanced"
+        # Premium fashion/beauty → slow cinematic
+        if category in ["fashion", "beauty"]:
+            defaults["pacing"] = "slow"
+    elif is_budget:
+        # Budget products → more energetic, value-focused
+        if defaults["mood"] == "luxury":
+            defaults["mood"] = "bold"
+        if defaults["pacing"] == "slow":
+            defaults["pacing"] = "balanced"
+        # Budget = more dynamic energy
+        if category in ["fashion", "general"]:
+            defaults["video_style"] = "dynamic"
+            defaults["pacing"] = "fast"
+
+    print(f"🎯 Smart defaults for {category} (${price_value:.0f}): style={defaults['video_style']}, mood={defaults['mood']}, pacing={defaults['pacing']}")
+
+    return defaults
+
+
 async def generate_ai_background(product_title: str, product_category: str = "", brand_colors: dict = None) -> str:
     """Generate a context-appropriate background using DALL-E based on product category"""
     try:
@@ -844,6 +975,18 @@ Style: Architectural Digest aesthetic, modern luxury interior.
 Soft window light, clean minimalist space.
 NO furniture, NO decor items, NO text.
 ONLY the empty room environment.
+Vertical 9:16 aspect ratio.""",
+
+            "party": f"""Festive celebration photography backdrop.
+Elegant party atmosphere with soft bokeh lights in background.
+Subtle confetti or sparkle effects, warm celebratory glow.
+Clean surface with hint of festive decoration, not cluttered.
+{color_hint}
+Style: upscale party supply brand, celebration photography.
+Warm, inviting, joyful atmosphere with premium feel.
+Soft gold or silver accents, subtle shimmer textures.
+NO balloons, NO party items, NO text, NO products.
+ONLY the empty festive backdrop environment.
 Vertical 9:16 aspect ratio.""",
 
             "general": f"""Premium product photography backdrop.
@@ -1276,12 +1419,15 @@ async def generate_html_from_url(url: str, prompt: str = "", features: VideoFeat
     print(f"🎨 {color_description}")
     print(f"🔤 Font: {font_family}, Text: {text_color}, Accent: {accent_color}")
 
-    # Creative direction settings
-    video_style = features.video_style if features.video_style else "editorial"
-    mood = features.mood if features.mood else "luxury"
-    pacing = features.pacing if features.pacing else "balanced"
+    # Creative direction settings - use smart defaults when "auto"
+    smart_defaults = get_smart_defaults(product_category, extracted_copy.get("price", ""))
 
-    print(f"🎬 Creative: Style={video_style}, Mood={mood}, Pacing={pacing}")
+    video_style = smart_defaults["video_style"] if features.video_style == "auto" else features.video_style
+    mood = smart_defaults["mood"] if features.mood == "auto" else features.mood
+    pacing = smart_defaults["pacing"] if features.pacing == "auto" else features.pacing
+    transition = smart_defaults["transition"] if features.transition == "auto" else features.transition
+
+    print(f"🎬 Creative: Style={video_style}, Mood={mood}, Pacing={pacing}, Transition={transition}")
 
     # Video style templates - proven composition structures
     style_templates = {
@@ -1360,7 +1506,7 @@ COMPOSITION: Full environmental shots, product integrated naturally, storytellin
     style_instruction = style_templates.get(video_style, style_templates["editorial"])
     mood_instruction = mood_modifiers.get(mood, mood_modifiers["luxury"])
     timing_values = pacing_timings.get(pacing, pacing_timings["balanced"])
-    transition_css = transition_styles.get(features.transition, transition_styles["fade"])
+    transition_css = transition_styles.get(transition, transition_styles["fade"])
 
     system_prompt = f"""You are a premium video ad designer. Create cinematic Instagram Reel HTML videos.
 
@@ -1998,7 +2144,14 @@ Return ONLY complete HTML. No explanations."""
             "product_name": extracted_copy.get("product_name", ""),
             "price": extracted_copy.get("price", ""),
             "brand": extracted_copy.get("brand", ""),
-            "category": product_category
+            "category": product_category,
+            # Include the resolved creative settings (useful when "auto" was used)
+            "creative_settings": {
+                "video_style": video_style,
+                "mood": mood,
+                "pacing": pacing,
+                "transition": transition
+            }
         }
         return html_content, copy_data
 
@@ -2542,6 +2695,13 @@ async def preview_from_url(request: PreviewRequest, _: bool = Depends(verify_api
                 "brand": copy_data.get("brand", ""),
                 "category": copy_data.get("category", "")
             },
+            # Auto-selected creative direction (based on category + price)
+            "creative_settings": copy_data.get("creative_settings", {
+                "video_style": request.video_style,
+                "mood": request.mood,
+                "pacing": request.pacing,
+                "transition": request.transition
+            }),
             "note": "Edit the 'copy' fields above, then call /generate-from-url with custom_headline, custom_subheadline, etc. to render video with your edits."
         }
 
