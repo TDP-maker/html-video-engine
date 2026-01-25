@@ -935,24 +935,41 @@ async def generate_html_from_url(url: str, prompt: str = "", features: VideoFeat
     print(f"📸 Found {len(product_images)} product images")
     print(f"📝 Extracted product name: {extracted_copy.get('product_name', 'Unknown')[:50]}")
 
+    # Detect product category early - this affects how we process images
+    product_category = detect_product_category(page_title, page_description)
+    print(f"🏷️ Detected category: {product_category}")
+
+    # Categories where we should KEEP original images (lifestyle shots)
+    # These look better with context/environment, not as cutouts
+    lifestyle_categories = ["fashion", "home", "food"]
+    is_lifestyle_product = product_category in lifestyle_categories
+
     # Premium feature: Extract brand colors from product image (if enabled)
     brand_colors = None
     if features.color_extraction and product_images:
         brand_colors = await extract_colors_from_image(product_images[0])
 
-    # Premium feature: Remove backgrounds if API key is set AND feature enabled
+    # Premium feature: Remove backgrounds - BUT skip for lifestyle categories
+    # Fashion/clothing looks terrible as floating cutouts - keep the context!
     if features.background_removal and REMOVE_BG_API_KEY and product_images:
-        print(f"🎨 Removing backgrounds (premium mode)...")
-        product_images = await process_images_for_premium(product_images)
-        print(f"✅ Background removal complete")
+        if is_lifestyle_product:
+            print(f"⏭️ Skipping background removal for {product_category} (lifestyle images work better with context)")
+        else:
+            print(f"🎨 Removing backgrounds (premium mode)...")
+            product_images = await process_images_for_premium(product_images)
+            print(f"✅ Background removal complete")
 
     # Premium feature: Generate AI background with brand colors (if enabled)
+    # For lifestyle categories, we might skip AI backgrounds since images have their own context
     ai_background_url = ""
     if features.ai_background:
-        try:
-            ai_background_url = await generate_ai_background(page_title, "", brand_colors)
-        except Exception as e:
-            print(f"⚠️ Skipping AI background: {e}")
+        if is_lifestyle_product:
+            print(f"⏭️ Skipping AI background for {product_category} (using original lifestyle images)")
+        else:
+            try:
+                ai_background_url = await generate_ai_background(page_title, product_category, brand_colors)
+            except Exception as e:
+                print(f"⚠️ Skipping AI background: {e}")
 
     # Build smart copy constraints from extracted content (if enabled)
     smart_copy = []
@@ -1413,22 +1430,53 @@ Return ONLY complete HTML. No explanations."""
     if prompt:
         user_prompt_parts.extend(["", f"EXTRA INSTRUCTIONS: {prompt}"])
 
+    # Add category-specific instructions
+    if is_lifestyle_product:
+        user_prompt_parts.extend([
+            "",
+            f"🎯 CATEGORY: {product_category.upper()} - USE LIFESTYLE TREATMENT",
+            "⚠️ IMPORTANT: These images show people/models - use them as FULL-BLEED lifestyle shots!",
+            "- Use .lifestyle-img class for images (edge-to-edge, cover the entire frame)",
+            "- Add .lifestyle-overlay gradient at bottom for text readability",
+            "- DO NOT use .product-wrap or floating product treatment",
+            "- Images should fill the ENTIRE 1080x1920 frame",
+            "- Let the model/lifestyle context tell the story",
+        ])
+    else:
+        user_prompt_parts.extend([
+            "",
+            f"🎯 CATEGORY: {product_category.upper()}",
+        ])
+
     user_prompt_parts.extend([
         "",
         "CRITICAL RULES:",
-        "1. Product images should be LARGE (950px wide, up to 1200px tall) and FILL the frame",
-        "2. No blank space - products fill available area",
-        "3. Text in safe zone at bottom",
     ])
 
+    if is_lifestyle_product:
+        user_prompt_parts.extend([
+            "1. Use LIFESTYLE treatment - images fill entire frame edge-to-edge",
+            "2. Apply .lifestyle-img class for full-bleed coverage",
+            "3. Text overlaid at bottom with gradient backdrop",
+        ])
+    else:
+        user_prompt_parts.extend([
+            "1. Product images should be LARGE (950px wide, up to 1200px tall) and FILL the frame",
+            "2. No blank space - products fill available area",
+            "3. Text in safe zone at bottom",
+        ])
+
+    rule_num = 4
     if features.smart_copy:
-        user_prompt_parts.append("4. ONLY use text from the EXTRACTED COPY section above - do not invent features or claims")
+        user_prompt_parts.append(f"{rule_num}. ONLY use text from the EXTRACTED COPY section above - do not invent features or claims")
+        rule_num += 1
 
     if features.cta_button:
-        user_prompt_parts.append(f"{'5' if features.smart_copy else '4'}. Final frame MUST have animated CTA button")
+        user_prompt_parts.append(f"{rule_num}. Final frame MUST have animated CTA button")
+        rule_num += 1
 
     if ai_background_url and features.ai_background:
-        user_prompt_parts.append(f"{'6' if features.smart_copy and features.cta_button else '5'}. Use the AI background image on some frames for premium cinematic look.")
+        user_prompt_parts.append(f"{rule_num}. Use the AI background image on some frames for premium cinematic look.")
 
     user_prompt = "\n".join(user_prompt_parts)
 
