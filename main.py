@@ -69,6 +69,10 @@ class VideoFeatures(BaseModel):
     price_badge: bool = True             # Animated price badge with sale strike-through
     trust_badges: bool = True            # Trust badges (Free Shipping, Authentic, etc.)
     multi_format: bool = False           # Generate multiple formats (9:16, 1:1, 16:9)
+    # Style customization
+    font_family: str = "Inter"           # Font for headlines
+    text_color: str = "#ffffff"          # Main text color
+    accent_color: str = ""               # Accent color (empty = use extracted)
 
 class URLVideoRequest(BaseModel):
     """Generate video from URL + prompt"""
@@ -1042,7 +1046,22 @@ async def generate_html_from_url(url: str, prompt: str = "", features: VideoFeat
         accent_rgb = (212, 175, 55)
         color_description = "Using neutral warm gold theme (no brand colors extracted)"
 
+    # Override with custom accent color if provided
+    if features.accent_color and features.accent_color != "#c9a96e":
+        accent_color = features.accent_color
+        accent_rgb = tuple(int(features.accent_color.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
+        print(f"🎨 Using custom accent color: {accent_color}")
+
+    # Custom text color
+    text_color = features.text_color if features.text_color else "#ffffff"
+
+    # Custom font
+    font_family = features.font_family if features.font_family else "Inter"
+    # Build Google Fonts URL with all weights
+    font_url_name = font_family.replace(' ', '+')
+
     print(f"🎨 {color_description}")
+    print(f"🔤 Font: {font_family}, Text: {text_color}, Accent: {accent_color}")
 
     system_prompt = f"""You are a premium video ad designer. Create cinematic Instagram Reel HTML videos.
 
@@ -1060,7 +1079,7 @@ async def generate_html_from_url(url: str, prompt: str = "", features: VideoFeat
 MANDATORY STRUCTURE (copy this exactly, using the brand colors):
 ```
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family={font_url_name}:wght@400;700;900&display=swap');
 * {{ margin: 0; padding: 0; box-sizing: border-box; }}
 
 /* ANIMATED GRADIENT BACKGROUND - Using brand colors */
@@ -1152,8 +1171,8 @@ body {{ background: #0a0a0a; }}
 /* PREMIUM TEXT STYLING - 15% from bottom (288px), above Instagram UI */
 .text-area {{ position: absolute; bottom: 300px; left: 0; text-align: center; width: 100%; padding: 0 120px; padding-right: 200px; transform: translateY(30px); z-index: 10; }}
 h1 {{
-  font-family: 'Inter', sans-serif; font-size: 72px; font-weight: 900;
-  color: white; text-transform: uppercase; line-height: 1.1; letter-spacing: -1px;
+  font-family: '{font_family}', sans-serif; font-size: 72px; font-weight: 900;
+  color: {text_color}; text-transform: uppercase; line-height: 1.1; letter-spacing: -1px;
   text-shadow: 0 4px 30px rgba(0,0,0,0.5), 0 0 60px rgba({primary_rgb[0]},{primary_rgb[1]},{primary_rgb[2]},0.3);
 }}
 /* Gradient text using brand colors */
@@ -1177,7 +1196,7 @@ h1 {{
 .text-accent {{
   color: {accent_color};
 }}
-p {{ font-family: 'Inter', sans-serif; font-size: 32px; font-weight: 400; color: rgba(255,255,255,0.7); margin-top: 16px; letter-spacing: 1px; }}
+p {{ font-family: '{font_family}', sans-serif; font-size: 32px; font-weight: 400; color: {text_color}; opacity: 0.7; margin-top: 16px; letter-spacing: 1px; }}
 /* Subtitle with brand color */
 p.subtitle-brand {{
   color: {primary_color};
@@ -1722,8 +1741,22 @@ async def home():
         .api-info h3 { font-size: 16px; margin-bottom: 15px; }
         code { background: #1a1a1a; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
 
+        /* Style controls */
+        .style-section { margin: 25px 0; padding: 20px; background: #111; border-radius: 12px; border: 1px solid #222; }
+        .style-section h3 { font-size: 16px; margin-bottom: 15px; color: #ccc; display: flex; align-items: center; gap: 8px; }
+        .style-section h3::before { content: '🎨'; }
+        .style-row { display: flex; gap: 20px; margin-bottom: 15px; }
+        .style-control { flex: 1; }
+        .style-control label { display: block; font-size: 13px; color: #888; margin-bottom: 6px; }
+        .style-control select { width: 100%; padding: 12px; font-size: 14px; border: 1px solid #333; border-radius: 8px; background: #1a1a1a; color: white; cursor: pointer; }
+        .style-control select:focus { outline: none; border-color: #6366f1; }
+        .style-control input[type="color"] { width: 100%; height: 44px; padding: 4px; border: 1px solid #333; border-radius: 8px; background: #1a1a1a; cursor: pointer; }
+        .color-preview { display: flex; align-items: center; gap: 10px; }
+        .color-preview span { font-size: 13px; color: #888; }
+
         @media (max-width: 600px) {
             .features-grid { grid-template-columns: 1fr; }
+            .style-row { flex-direction: column; gap: 15px; }
         }
     </style>
 </head>
@@ -1800,6 +1833,33 @@ async def home():
                 </div>
             </div>
 
+            <div class="style-section">
+                <h3>Text Styling</h3>
+                <div class="style-row">
+                    <div class="style-control">
+                        <label>Font Family</label>
+                        <select id="fontSelect">
+                            <option value="Inter">Inter (Modern)</option>
+                            <option value="Playfair Display">Playfair Display (Elegant)</option>
+                            <option value="Montserrat">Montserrat (Clean)</option>
+                            <option value="Oswald">Oswald (Bold)</option>
+                            <option value="Roboto">Roboto (Neutral)</option>
+                            <option value="Poppins">Poppins (Friendly)</option>
+                            <option value="Bebas Neue">Bebas Neue (Impact)</option>
+                            <option value="Cormorant Garamond">Cormorant Garamond (Luxury)</option>
+                        </select>
+                    </div>
+                    <div class="style-control">
+                        <label>Text Color</label>
+                        <input type="color" id="textColor" value="#ffffff">
+                    </div>
+                    <div class="style-control">
+                        <label>Accent Color</label>
+                        <input type="color" id="accentColor" value="#c9a96e">
+                    </div>
+                </div>
+            </div>
+
             <button type="submit" id="submitBtn">Generate Video</button>
         </form>
 
@@ -1825,7 +1885,7 @@ async def home():
         const downloadArea = document.getElementById('downloadArea');
         const submitBtn = document.getElementById('submitBtn');
 
-        // Collect feature toggles
+        // Collect feature toggles and style options
         function getFeatures() {
             return {
                 background_removal: document.getElementById('feat_bg_removal').checked,
@@ -1839,7 +1899,11 @@ async def home():
                 smart_copy: document.getElementById('feat_smart_copy').checked,
                 price_badge: document.getElementById('feat_price_badge').checked,
                 trust_badges: document.getElementById('feat_trust_badges').checked,
-                multi_format: document.getElementById('feat_multi_format').checked
+                multi_format: document.getElementById('feat_multi_format').checked,
+                // Style options
+                font_family: document.getElementById('fontSelect').value,
+                text_color: document.getElementById('textColor').value,
+                accent_color: document.getElementById('accentColor').value
             };
         }
 
