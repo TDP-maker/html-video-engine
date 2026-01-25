@@ -18,6 +18,28 @@ import re
 from datetime import datetime
 from PIL import Image
 from collections import Counter
+import random
+
+# --- RETRY HELPER WITH EXPONENTIAL BACKOFF ---
+async def retry_with_backoff(func, max_retries: int = 4, base_delay: float = 2.0):
+    """
+    Retry an async function with exponential backoff.
+    Delays: 2s, 4s, 8s, 16s (with jitter)
+    """
+    last_exception = None
+    for attempt in range(max_retries):
+        try:
+            return await func()
+        except Exception as e:
+            last_exception = e
+            if attempt < max_retries - 1:
+                # Exponential backoff with jitter
+                delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
+                print(f"⚠️ Attempt {attempt + 1} failed, retrying in {delay:.1f}s: {e}")
+                await asyncio.sleep(delay)
+            else:
+                print(f"❌ All {max_retries} attempts failed: {e}")
+    raise last_exception
 
 # --- REMOVE.BG BACKGROUND REMOVAL ---
 REMOVE_BG_API_KEY = os.environ.get("REMOVE_BG_API_KEY", "")
@@ -494,11 +516,20 @@ async def extract_images_with_playwright(url: str) -> tuple[list, str, str, dict
                     '.product-single__photo img', '.product__photo img'
                 ];
 
+                // Minimum resolution for quality (400px)
+                const MIN_RESOLUTION = 400;
+
                 for (const selector of productSelectors) {
                     document.querySelectorAll(selector).forEach(img => {
                         let src = img.src || img.dataset.src || img.getAttribute('data-lazy-src');
                         if (src && src.startsWith('http') && !productImages.includes(src)) {
-                            productImages.push(src);
+                            // Check resolution for product images too
+                            const width = img.naturalWidth || img.width || 0;
+                            const height = img.naturalHeight || img.height || 0;
+                            // Accept if meets minimum resolution OR is explicitly a product URL
+                            if (width >= MIN_RESOLUTION || height >= MIN_RESOLUTION || src.includes('product')) {
+                                productImages.push(src);
+                            }
                         }
                     });
                 }
@@ -512,7 +543,8 @@ async def extract_images_with_playwright(url: str) -> tuple[list, str, str, dict
                         const height = img.naturalHeight || img.height || 0;
                         // Skip images that look like logos (wider than tall, small height)
                         const isLikelyLogo = width > height * 2 && height < 150;
-                        if (!isLikelyLogo && (width >= 200 || height >= 200 || src.includes('product'))) {
+                        // Increased minimum resolution for quality (400px vs old 200px)
+                        if (!isLikelyLogo && (width >= MIN_RESOLUTION || height >= MIN_RESOLUTION || src.includes('product'))) {
                             otherImages.push(src);
                         }
                     }
@@ -647,12 +679,12 @@ Return ONLY valid JSON, no explanation."""}
 
 
 async def remove_background(image_url: str) -> str:
-    """Remove background from product image using remove.bg API"""
+    """Remove background from product image using remove.bg API with retry logic"""
     if not REMOVE_BG_API_KEY:
         print("⚠️ No REMOVE_BG_API_KEY set, skipping background removal")
         return image_url
 
-    try:
+    async def _call_api():
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(
                 "https://api.remove.bg/v1.0/removebg",
@@ -677,14 +709,21 @@ async def remove_background(image_url: str) -> str:
                     f.write(response.content)
 
                 print(f"✅ Background removed: {filename}")
-                # Return as file:// URL for Playwright to load
                 return f"file://{filepath}"
+            elif response.status_code >= 500:
+                # Server error - worth retrying
+                raise Exception(f"Server error {response.status_code}: {response.text}")
             else:
+                # Client error (4xx) - don't retry
                 print(f"⚠️ remove.bg error: {response.status_code} - {response.text}")
                 return image_url
 
+        return image_url
+
+    try:
+        return await retry_with_backoff(_call_api, max_retries=3, base_delay=2.0)
     except Exception as e:
-        print(f"⚠️ Background removal failed: {e}")
+        print(f"⚠️ Background removal failed after retries: {e}")
         return image_url
 
 
@@ -1005,37 +1044,42 @@ Vertical 9:16 aspect ratio."""
 
         print(f"🎨 Generating {product_category} AI background...")
 
-        response = client.images.generate(
-            model="dall-e-3",
-            prompt=bg_prompt,
-            size="1024x1792",  # Vertical for reels
-            quality="standard",
-            n=1
-        )
+        async def _generate_and_download():
+            response = client.images.generate(
+                model="dall-e-3",
+                prompt=bg_prompt,
+                size="1024x1792",  # Vertical for reels
+                quality="standard",
+                n=1
+            )
 
-        bg_url = response.data[0].url
-        print(f"✅ AI background generated")
+            bg_url = response.data[0].url
+            print(f"✅ AI background generated")
 
-        # Download and save locally
-        async with httpx.AsyncClient(timeout=60) as http_client:
-            img_response = await http_client.get(bg_url)
-            if img_response.status_code == 200:
-                current_folder = os.getcwd()
-                bg_folder = os.path.join(current_folder, "ai_backgrounds")
-                os.makedirs(bg_folder, exist_ok=True)
+            # Download and save locally with retry
+            async with httpx.AsyncClient(timeout=60) as http_client:
+                img_response = await http_client.get(bg_url)
+                if img_response.status_code == 200:
+                    current_folder = os.getcwd()
+                    bg_folder = os.path.join(current_folder, "ai_backgrounds")
+                    os.makedirs(bg_folder, exist_ok=True)
 
-                filename = f"bg_{uuid.uuid4().hex[:8]}.png"
-                filepath = os.path.join(bg_folder, filename)
+                    filename = f"bg_{uuid.uuid4().hex[:8]}.png"
+                    filepath = os.path.join(bg_folder, filename)
 
-                with open(filepath, "wb") as f:
-                    f.write(img_response.content)
+                    with open(filepath, "wb") as f:
+                        f.write(img_response.content)
 
-                return f"file://{filepath}"
+                    return f"file://{filepath}"
+                elif img_response.status_code >= 500:
+                    raise Exception(f"Download failed with status {img_response.status_code}")
 
-        return bg_url
+            return bg_url
+
+        return await retry_with_backoff(_generate_and_download, max_retries=3, base_delay=2.0)
 
     except Exception as e:
-        print(f"⚠️ AI background generation failed: {e}")
+        print(f"⚠️ AI background generation failed after retries: {e}")
         return ""
 
 
@@ -1469,10 +1513,11 @@ COMPOSITION: Full environmental shots, product integrated naturally, storytellin
     }
 
     # Pacing/timing presets (in milliseconds per frame)
+    # First frame is longer to let viewers read the opening headline
     pacing_timings = {
-        "slow": [4500, 4500, 4500, 5000],      # Cinematic, let it breathe
-        "balanced": [3500, 3500, 3500, 4000],   # Standard rhythm
-        "fast": [2500, 2500, 2500, 3000]        # Quick cuts, energy
+        "slow": [5500, 4500, 4500, 5000],      # Cinematic, let it breathe (first frame +1s)
+        "balanced": [4500, 3500, 3500, 4000],   # Standard rhythm (first frame +1s)
+        "fast": [3200, 2500, 2500, 3000]        # Quick cuts, energy (first frame +0.7s)
     }
 
     # Transition styles - CSS for different frame transitions
@@ -1528,12 +1573,21 @@ COMPOSITION: Full environmental shots, product integrated naturally, storytellin
 
 MANDATORY STRUCTURE (copy this exactly, using the brand colors):
 ```
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family={font_url_name}:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
-@import url('https://fonts.googleapis.com/css2?family={font_url_name}:wght@400;700;900&display=swap');
 * {{ margin: 0; padding: 0; box-sizing: border-box; }}
 
+/* FONT SMOOTHING & TEXT RENDERING */
+html {{
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}}
+
 /* ANIMATED GRADIENT BACKGROUND - Using brand colors */
-body {{ background: #0a0a0a; }}
+body {{ background: #0a0a0a; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility; }}
 .reel-container {{
   width: 1080px; height: 1920px; position: relative; overflow: hidden;
   background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%);
@@ -1577,14 +1631,25 @@ body {{ background: #0a0a0a; }}
 .safe-zone {{ position: absolute; top: 200px; left: 80px; right: 180px; bottom: 350px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; }}
 .content-area {{ flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; }}
 
-/* PRODUCT ANIMATIONS - Only for non-lifestyle */
-.frame.active .product-wrap {{ animation: floatIn 1.2s ease-out forwards, float 10s ease-in-out 1.5s infinite; }}
-.frame.active .text-area {{ animation: fadeUp 0.8s ease-out 0.4s forwards; opacity: 0; }}
-.frame.active .accent-line {{ animation: lineGrow 0.6s ease-out 0.6s forwards; }}
+/* PREMIUM EASING - Natural motion curves */
+:root {{
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+}}
+
+/* PRODUCT ANIMATIONS - Staggered entrances with premium easing */
+.frame.active .product-wrap {{ animation: floatIn 1.2s var(--ease-out-expo) forwards, float 10s var(--ease-in-out-smooth) 1.5s infinite; }}
+.frame.active .text-area {{ animation: fadeUp 0.8s var(--ease-out-expo) 0.5s forwards; opacity: 0; }}
+.frame.active .text-area h1 {{ animation: fadeUp 0.7s var(--ease-out-expo) 0.5s forwards; opacity: 0; }}
+.frame.active .text-area p {{ animation: fadeUp 0.7s var(--ease-out-expo) 0.7s forwards; opacity: 0; }}
+.frame.active .accent-line {{ animation: lineGrow 0.6s var(--ease-out-quint) 0.9s forwards; }}
 
 /* LIFESTYLE - Override: NO animations at all */
 .frame.lifestyle.active .lifestyle-img {{ animation: none !important; transform: none !important; }}
-.frame.lifestyle.active .text-area {{ animation: fadeUp 0.8s ease-out 0.2s forwards; opacity: 0; }}
+.frame.lifestyle.active .text-area {{ animation: fadeUp 0.8s var(--ease-out-expo) 0.2s forwards; opacity: 0; }}
+.frame.lifestyle.active .text-area h1 {{ animation: fadeUp 0.7s var(--ease-out-expo) 0.3s forwards; opacity: 0; }}
+.frame.lifestyle.active .text-area p {{ animation: fadeUp 0.7s var(--ease-out-expo) 0.5s forwards; opacity: 0; }}
 
 /* PRODUCT TREATMENT - Premium floating product with brand-colored glow */
 .product-wrap {{ position: relative; transform: scale(0.9) translateY(20px); opacity: 0; z-index: 1; }}
@@ -1614,15 +1679,29 @@ body {{ background: #0a0a0a; }}
 /* AI BACKGROUND TREATMENT - Cinematic atmosphere */
 .ai-bg {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 1; z-index: 0; }}
 .frame.ai-background .ai-bg {{ animation: none; }}
+/* Gradient overlay to push AI background back and make product pop */
+.ai-bg-overlay {{
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;
+  background: radial-gradient(ellipse at center, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.5) 70%, rgba(0,0,0,0.7) 100%);
+  pointer-events: none;
+}}
 
 /* PREMIUM TEXT STYLING - 15% from bottom, properly centered */
 /* Symmetric margins for true center alignment */
 .text-area {{ position: absolute; bottom: 300px; left: 80px; right: 80px; text-align: center; z-index: 10; }}
 h1 {{
-  font-family: '{font_family}', sans-serif; font-size: 72px; font-weight: 900;
+  font-family: '{font_family}', sans-serif;
+  font-size: clamp(48px, 7vw, 72px); /* Auto-scales based on container */
+  font-weight: 900;
   color: {text_color}; text-transform: uppercase; line-height: 1.1; letter-spacing: -1px;
   text-shadow: 0 4px 30px rgba(0,0,0,0.5), 0 0 60px rgba({primary_rgb[0]},{primary_rgb[1]},{primary_rgb[2]},0.3);
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
 }}
+/* Smaller headline variant for long text */
+h1.headline-sm {{ font-size: clamp(36px, 5vw, 56px); }}
+h1.headline-lg {{ font-size: clamp(56px, 8vw, 84px); }}
 /* Gradient text using brand colors */
 .text-gradient {{
   background: linear-gradient(135deg, #fff 0%, {accent_color} 50%, #fff 100%);
@@ -1644,7 +1723,7 @@ h1 {{
 .text-accent {{
   color: {accent_color};
 }}
-p {{ font-family: '{font_family}', sans-serif; font-size: 32px; font-weight: 400; color: {text_color}; opacity: 0.7; margin-top: 16px; letter-spacing: 1px; }}
+p {{ font-family: '{font_family}', sans-serif; font-size: 32px; font-weight: 400; color: {text_color}; opacity: 0.7; margin-top: 16px; letter-spacing: 1px; text-shadow: 0 2px 20px rgba(0,0,0,0.6); }}
 /* Subtitle with brand color */
 p.subtitle-brand {{
   color: {primary_color};
@@ -1699,7 +1778,7 @@ p.subtitle-brand {{
   animation: ctaPulse 2s ease-in-out infinite;
 }}
 .frame.active .cta-button {{
-  animation: ctaAppear 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 0.6s forwards, ctaFloat 6s ease-in-out 1.4s infinite;
+  animation: ctaAppear 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 1s forwards, ctaFloat 6s var(--ease-in-out-smooth) 1.8s infinite;
 }}
 .frame.active .cta-button::before {{
   animation: ctaShine 2s ease-in-out 1s infinite;
@@ -1802,7 +1881,7 @@ p.subtitle-brand {{
   transform: translateY(20px);
 }}
 .frame.active .trust-badges {{
-  animation: trustAppear 0.6s ease-out 1s forwards;
+  animation: trustAppear 0.6s var(--ease-out-expo) 1.2s forwards;
 }}
 .trust-badge {{
   display: flex;
@@ -1913,6 +1992,7 @@ IMAGE TREATMENT - CHOOSE BASED ON IMAGE TYPE:
 {"**PRODUCT + AI BACKGROUND** (premium cinematic look):" if features.ai_background else ""}
 {'''<div class="frame ai-background active">
   <img src="AI_BG_URL" class="ai-bg">
+  <div class="ai-bg-overlay"></div>
   <div class="product-wrap"><img src="URL" class="product-img"></div>
   <div class="text-area">...</div>
 </div>''' if features.ai_background else ""}
