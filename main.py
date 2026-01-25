@@ -1289,9 +1289,38 @@ COMPOSITION: Full environmental shots, product integrated naturally, storytellin
         "fast": [2500, 2500, 2500, 3000]        # Quick cuts, energy
     }
 
+    # Transition styles - CSS for different frame transitions
+    transition_styles = {
+        "fade": """/* FADE TRANSITION - Smooth crossfade */
+.frame { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; transition: opacity 1.2s ease-in-out; }
+.frame.active { opacity: 1; }
+.frame.exit { opacity: 0; }""",
+
+        "slide": """/* SLIDE TRANSITION - Horizontal slide */
+.frame { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; transform: translateX(100%); transition: transform 0.8s ease-in-out, opacity 0.8s ease-in-out; }
+.frame.active { opacity: 1; transform: translateX(0); }
+.frame.exit { opacity: 0; transform: translateX(-100%); }""",
+
+        "zoom": """/* ZOOM TRANSITION - Scale in/out */
+.frame { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; transform: scale(0.8); transition: transform 1s ease-out, opacity 1s ease-out; }
+.frame.active { opacity: 1; transform: scale(1); }
+.frame.exit { opacity: 0; transform: scale(1.2); }""",
+
+        "blur": """/* BLUR TRANSITION - Focus/defocus effect */
+.frame { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; filter: blur(20px); transition: opacity 1s ease-in-out, filter 1s ease-in-out; }
+.frame.active { opacity: 1; filter: blur(0); }
+.frame.exit { opacity: 0; filter: blur(20px); }""",
+
+        "wipe": """/* WIPE TRANSITION - Reveal effect */
+.frame { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; clip-path: inset(0 100% 0 0); transition: clip-path 1s ease-in-out, opacity 0.5s ease-in-out; }
+.frame.active { opacity: 1; clip-path: inset(0 0 0 0); }
+.frame.exit { opacity: 0; clip-path: inset(0 0 0 100%); }"""
+    }
+
     style_instruction = style_templates.get(video_style, style_templates["editorial"])
     mood_instruction = mood_modifiers.get(mood, mood_modifiers["luxury"])
     timing_values = pacing_timings.get(pacing, pacing_timings["balanced"])
+    transition_css = transition_styles.get(features.transition, transition_styles["fade"])
 
     system_prompt = f"""You are a premium video ad designer. Create cinematic Instagram Reel HTML videos.
 
@@ -1355,10 +1384,8 @@ body {{ background: #0a0a0a; }}
   50% {{ transform: translate(10px, -10px) scale(1.02); }}
 }}
 
-/* FRAME TRANSITIONS - Smooth crossfade */
-.frame {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0; transition: opacity 1.5s ease-in-out; }}
-.frame.active {{ opacity: 1; transition: opacity 1.5s ease-in-out; }}
-.frame.exit {{ opacity: 0; transition: opacity 1.5s ease-in-out; }}
+{transition_css}
+.frame {{ display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0; }}
 
 /* Safe zone helper - balanced vertical distribution */
 .safe-zone {{ position: absolute; top: 200px; left: 80px; right: 180px; bottom: 350px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; }}
@@ -2428,6 +2455,7 @@ async def preview_from_url(request: PreviewRequest, _: bool = Depends(verify_api
             video_style=request.video_style,
             mood=request.mood,
             pacing=request.pacing,
+            transition=request.transition,
             # Pass any custom copy overrides
             custom_headline=request.custom_headline,
             custom_subheadline=request.custom_subheadline,
