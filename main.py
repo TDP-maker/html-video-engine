@@ -3908,6 +3908,10 @@ async def home():
                 });
                 const data = await res.json();
 
+                if (!res.ok) {
+                    throw new Error(data.detail || data.error || 'Request failed');
+                }
+
                 if (data.video_id) {
                     currentMultiFormat = data.multi_format || false;
                     currentFormatIds = data.format_ids || null;
@@ -3916,7 +3920,8 @@ async def home():
                     throw new Error(data.detail || 'Failed to start');
                 }
             } catch (err) {
-                statusText.innerHTML = '<span class="error">Error: ' + err.message + '</span>';
+                const errorMsg = err.message || 'An unexpected error occurred';
+                statusText.innerHTML = '<span class="error">Error: ' + errorMsg + '</span>';
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Generate Video';
             }
@@ -3928,6 +3933,15 @@ async def home():
                 const pollId = currentMultiFormat ? currentFormatIds.landscape : videoId;
                 const res = await fetch('/status/' + pollId);
                 const data = await res.json();
+
+                // Handle HTTP errors (4xx, 5xx)
+                if (!res.ok) {
+                    const errorMsg = data.detail || data.error || 'Request failed';
+                    statusText.innerHTML = '<span class="error">Error: ' + errorMsg + '</span>';
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Try Again';
+                    return;
+                }
 
                 progressFill.style.width = data.progress + '%';
 
@@ -3951,7 +3965,8 @@ async def home():
                     submitBtn.disabled = false;
                     submitBtn.textContent = 'Generate Another';
                 } else if (data.status === 'error') {
-                    statusText.innerHTML = '<span class="error">Error: ' + data.error + '</span>';
+                    const errorMsg = data.error || 'Unknown error occurred';
+                    statusText.innerHTML = '<span class="error">Error: ' + errorMsg + '</span>';
                     submitBtn.disabled = false;
                     submitBtn.textContent = 'Try Again';
                 } else {
