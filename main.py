@@ -531,27 +531,154 @@ async def process_images_for_premium(product_images: list) -> list:
     return processed
 
 
+def detect_product_category(title: str, description: str = "") -> str:
+    """Detect product category from title and description"""
+    text = (title + " " + description).lower()
+
+    # Fashion/Clothing keywords
+    fashion_keywords = ['dress', 'shirt', 'pants', 'jeans', 'jacket', 'coat', 'sweater',
+                       'blouse', 'skirt', 'shorts', 'clothing', 'apparel', 'fashion',
+                       'wear', 'outfit', 'style', 'collection', 'women', 'men', 'kids',
+                       'top', 'bottom', 'suit', 'blazer', 'cardigan', 'hoodie', 't-shirt',
+                       'everyday', 'casual', 'formal', 'loungewear', 'activewear']
+
+    # Footwear keywords
+    footwear_keywords = ['shoe', 'sneaker', 'boot', 'sandal', 'heel', 'loafer',
+                        'trainer', 'footwear', 'nike', 'adidas', 'jordan', 'air max']
+
+    # Beauty/Skincare keywords
+    beauty_keywords = ['skincare', 'makeup', 'cosmetic', 'serum', 'cream', 'moisturizer',
+                      'lipstick', 'foundation', 'beauty', 'skin', 'face', 'anti-aging']
+
+    # Tech/Electronics keywords
+    tech_keywords = ['phone', 'laptop', 'computer', 'tablet', 'headphone', 'speaker',
+                    'watch', 'smart', 'wireless', 'bluetooth', 'electronic', 'device']
+
+    # Food/Beverage keywords
+    food_keywords = ['food', 'drink', 'beverage', 'coffee', 'tea', 'snack', 'organic',
+                    'protein', 'supplement', 'vitamin', 'health']
+
+    # Home/Furniture keywords
+    home_keywords = ['furniture', 'home', 'decor', 'chair', 'table', 'sofa', 'lamp',
+                    'bed', 'pillow', 'rug', 'curtain', 'kitchen']
+
+    # Check categories (order matters - more specific first)
+    if any(kw in text for kw in footwear_keywords):
+        return "footwear"
+    elif any(kw in text for kw in fashion_keywords):
+        return "fashion"
+    elif any(kw in text for kw in beauty_keywords):
+        return "beauty"
+    elif any(kw in text for kw in tech_keywords):
+        return "tech"
+    elif any(kw in text for kw in food_keywords):
+        return "food"
+    elif any(kw in text for kw in home_keywords):
+        return "home"
+    else:
+        return "general"
+
+
 async def generate_ai_background(product_title: str, product_category: str = "", brand_colors: dict = None) -> str:
-    """Generate an abstract/atmospheric background using DALL-E"""
+    """Generate a context-appropriate background using DALL-E based on product category"""
     try:
         client = OpenAI()
 
-        # Use extracted brand colors if available
+        # Auto-detect category if not provided
+        if not product_category:
+            product_category = detect_product_category(product_title)
+
+        print(f"🎨 Detected product category: {product_category}")
+
+        # Use extracted brand colors if available (but subtly)
         if brand_colors and brand_colors.get("primary"):
-            color_desc = f"Colors: {brand_colors['primary_name']}, {brand_colors['secondary_name']}, with subtle hints of {brand_colors['accent_name']}."
+            color_hint = f"Subtle accent lighting in {brand_colors['primary_name']} tones."
         else:
-            color_desc = "Colors: deep purples, dark blues, hints of pink/magenta."
+            color_hint = "Neutral, sophisticated lighting."
 
-        # Create a prompt for abstract background - NO product, just atmosphere
-        bg_prompt = f"""Abstract premium background for luxury advertising.
-Dark moody atmosphere with subtle gradients.
-Soft ethereal glow, bokeh light effects, gentle color transitions.
-{color_desc}
-Style: cinematic, high-end, minimal, elegant.
-NO products, NO text, NO logos, NO objects - ONLY abstract atmospheric visuals.
-Vertical 9:16 aspect ratio composition."""
+        # Category-specific background prompts - realistic, contextual environments
+        bg_prompts = {
+            "fashion": f"""Professional fashion photography studio backdrop.
+Clean minimalist environment with soft diffused lighting.
+Light gray seamless paper background or elegant white cyclorama wall.
+Soft natural window light from the side, subtle shadows.
+{color_hint}
+Style: high-end fashion editorial, Vogue/Elle magazine aesthetic.
+Clean, modern, sophisticated, premium feel.
+NO people, NO clothing, NO mannequins, NO text, NO products.
+ONLY the empty studio background environment.
+Vertical 9:16 aspect ratio composition.""",
 
-        print(f"🎨 Generating AI background...")
+            "footwear": f"""Urban sneaker photography environment.
+Clean concrete floor with subtle texture, industrial aesthetic.
+Dramatic side lighting with soft shadows on polished surface.
+Minimalist urban backdrop - clean walls, subtle textures.
+{color_hint}
+Style: Nike/Adidas campaign aesthetic, streetwear photography.
+Moody but clean, premium athletic brand feel.
+NO shoes, NO feet, NO products, NO text.
+ONLY the empty backdrop environment.
+Vertical 9:16 aspect ratio.""",
+
+            "beauty": f"""Luxury skincare and beauty photography backdrop.
+Soft, dreamy lighting with gentle gradients.
+Elegant marble or soft fabric surface texture.
+Warm, spa-like atmosphere with subtle rose gold or cream tones.
+{color_hint}
+Style: luxury cosmetics brand campaign, Glossier/La Mer aesthetic.
+Soft focus areas, ethereal glow, premium serene feel.
+NO products, NO bottles, NO text.
+ONLY the empty background.
+Vertical 9:16 aspect ratio.""",
+
+            "tech": f"""Modern tech product photography environment.
+Sleek dark surface with subtle reflections.
+Clean gradient backdrop from dark gray to black.
+Soft blue or white accent lighting, futuristic feel.
+{color_hint}
+Style: Apple product photography aesthetic, minimal and premium.
+Clean lines, subtle light rays, polished reflective surface.
+NO devices, NO electronics, NO text, NO products.
+ONLY the empty backdrop.
+Vertical 9:16 aspect ratio.""",
+
+            "food": f"""Appetizing food photography setting.
+Natural wooden table or marble countertop surface.
+Warm, inviting natural window light from the side.
+Rustic-modern kitchen environment feel.
+{color_hint}
+Style: gourmet food magazine, Bon Appetit aesthetic.
+Warm tones, soft shadows, appetizing atmosphere.
+NO food, NO dishes, NO utensils, NO text.
+ONLY the empty surface and background.
+Vertical 9:16 aspect ratio.""",
+
+            "home": f"""Interior design photography backdrop.
+Elegant modern living space with soft natural light.
+Neutral walls with subtle texture, warm ambient glow.
+Clean architectural lines, sophisticated atmosphere.
+{color_hint}
+Style: Architectural Digest aesthetic, modern luxury interior.
+Soft window light, clean minimalist space.
+NO furniture, NO decor items, NO text.
+ONLY the empty room environment.
+Vertical 9:16 aspect ratio.""",
+
+            "general": f"""Premium product photography backdrop.
+Clean, sophisticated studio environment.
+Soft gradient lighting from light gray to white.
+Subtle shadows, professional commercial photography feel.
+{color_hint}
+Style: high-end advertising photography, clean and minimal.
+Professional studio lighting, elegant simplicity.
+NO products, NO text, NO logos, NO objects.
+ONLY the empty background.
+Vertical 9:16 aspect ratio."""
+        }
+
+        bg_prompt = bg_prompts.get(product_category, bg_prompts["general"])
+
+        print(f"🎨 Generating {product_category} AI background...")
 
         response = client.images.generate(
             model="dall-e-3",
@@ -877,14 +1004,14 @@ async def generate_html_from_url(url: str, prompt: str = "", features: VideoFeat
         accent_rgb = hex_to_rgb(accent_color)
         color_description = f"Brand colors extracted: {brand_colors['primary_name']} ({primary_color}), {brand_colors['secondary_name']} ({secondary_color}), {brand_colors['accent_name']} ({accent_color})"
     else:
-        # Default purple/pink theme
-        primary_color = "#6366f1"
-        secondary_color = "#ec4899"
-        accent_color = "#8b5cf6"
-        primary_rgb = (99, 102, 241)
-        secondary_rgb = (236, 72, 153)
-        accent_rgb = (139, 92, 246)
-        color_description = "Using default theme colors"
+        # Default neutral/warm theme - works for any product
+        primary_color = "#c9a96e"    # Warm gold
+        secondary_color = "#8b7355"  # Warm bronze
+        accent_color = "#d4af37"     # Classic gold
+        primary_rgb = (201, 169, 110)
+        secondary_rgb = (139, 115, 85)
+        accent_rgb = (212, 175, 55)
+        color_description = "Using neutral warm gold theme (no brand colors extracted)"
 
     print(f"🎨 {color_description}")
 
@@ -921,7 +1048,7 @@ body {{ background: #0a0a0a; }}
 }}
 @keyframes glowMove {{
   0%, 100% {{ transform: translate(0, 0) scale(1); }}
-  50% {{ transform: translate(30px, -30px) scale(1.1); }}
+  50% {{ transform: translate(10px, -10px) scale(1.02); }}
 }}
 
 /* FRAME TRANSITIONS - Products can fill entire frame */
@@ -934,7 +1061,7 @@ body {{ background: #0a0a0a; }}
 .content-area {{ flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; }}
 
 /* PRODUCT ANIMATIONS */
-.frame.active .product-wrap {{ animation: floatIn 1s cubic-bezier(0.34, 1.56, 0.64, 1) forwards, float 4s ease-in-out 1s infinite; }}
+.frame.active .product-wrap {{ animation: floatIn 1.2s ease-out forwards, float 6s ease-in-out 1.5s infinite; }}
 .frame.active .text-area {{ animation: fadeUp 0.8s ease-out 0.4s forwards; opacity: 0; }}
 .frame.active .lifestyle-img {{ animation: zoomIn 1.2s ease-out forwards; }}
 .frame.active .accent-line {{ animation: lineGrow 0.6s ease-out 0.6s forwards; }}
@@ -1162,7 +1289,7 @@ p {{ font-family: 'Inter', sans-serif; font-size: 32px; font-weight: 400; color:
 }}
 @keyframes float {{
   0%, 100% {{ transform: translateY(0); }}
-  50% {{ transform: translateY(-12px); }}
+  50% {{ transform: translateY(-6px); }}
 }}
 @keyframes fadeUp {{
   0% {{ opacity: 0; transform: translateY(30px); }}
