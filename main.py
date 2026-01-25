@@ -1468,9 +1468,21 @@ Return ONLY complete HTML. No explanations."""
         f"Product: {page_title}",
         f"URL: {url}",
         "",
-        "IMAGES (use these exact URLs):",
+        "IMAGES (use these exact URLs - ONE per frame):",
         images_text,
     ]
+
+    # For lifestyle, explicitly map images to frames
+    if is_lifestyle_product and product_images:
+        user_prompt_parts.extend([
+            "",
+            "📸 IMAGE TO FRAME MAPPING (MUST FOLLOW):",
+        ])
+        for i, img in enumerate(product_images[:4]):  # Max 4 frames
+            frame_label = "FINAL/CTA" if i == min(3, len(product_images)-1) else f"Frame {i+1}"
+            user_prompt_parts.append(f"   {frame_label}: {img}")
+        user_prompt_parts.append("")
+        user_prompt_parts.append("USE A DIFFERENT IMAGE ON EACH FRAME - cycle through the list above!")
 
     if bg_info:
         user_prompt_parts.append(bg_info)
@@ -1511,10 +1523,13 @@ Return ONLY complete HTML. No explanations."""
             '  <div class="text-area"><h1>One Headline</h1></div>',
             '</div>',
             "",
-            "FRAME 1: First image + intro headline",
-            "FRAME 2: Second image + feature headline",
-            "FRAME 3: Third image + benefit headline",
-            "FRAME 4 (FINAL): Fourth image + CTA button ONLY here",
+            "USE THE IMAGE MAPPING ABOVE:",
+            "- FRAME 1: Use image 1 from the list + intro headline",
+            "- FRAME 2: Use image 2 from the list + feature headline",
+            "- FRAME 3: Use image 3 from the list + benefit headline",
+            "- FRAME 4 (FINAL): Use image 4 from the list + CTA button",
+            "",
+            "⚠️ NEVER repeat the same image - each frame MUST have a DIFFERENT image URL",
             "",
             "FORBIDDEN:",
             "- .bg-glow element",
