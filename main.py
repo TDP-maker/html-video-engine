@@ -55,6 +55,18 @@ class HTMLVideoRequest(BaseModel):
     format: str = "reel"
     fps: int = 30
 
+class VideoFeatures(BaseModel):
+    """Toggleable premium features"""
+    background_removal: bool = True      # Remove background from products (needs API key)
+    ai_background: bool = True           # Generate AI cinematic backgrounds
+    color_extraction: bool = True        # Extract brand colors from product
+    cta_button: bool = True              # Animated CTA button on final frame
+    progress_bar: bool = True            # Progress bar at top
+    text_effects: bool = True            # Gradient text, accent lines
+    floating_animation: bool = True      # Product float animation
+    ken_burns: bool = True               # Slow zoom on lifestyle images
+    smart_copy: bool = True              # Only use text from page (no hallucination)
+
 class URLVideoRequest(BaseModel):
     """Generate video from URL + prompt"""
     url: str
@@ -62,6 +74,7 @@ class URLVideoRequest(BaseModel):
     format: str = "reel"
     fps: int = 30
     record_id: str = ""  # Airtable record ID for tracking
+    features: VideoFeatures = VideoFeatures()  # Feature toggles
 
 # --- RENDER ENGINES ---
 
@@ -772,52 +785,72 @@ async def extract_colors_from_image(image_url: str) -> dict:
         return None
 
 
-async def generate_html_from_url(url: str, prompt: str = "") -> str:
+async def generate_html_from_url(url: str, prompt: str = "", features: VideoFeatures = None) -> str:
     """Use Playwright + OpenAI to generate HTML video content from a URL"""
 
+    # Use default features if none provided
+    if features is None:
+        features = VideoFeatures()
+
     print(f"🔍 Extracting images and copy with Playwright...")
+    print(f"⚙️ Features: BG Removal={features.background_removal}, AI BG={features.ai_background}, Colors={features.color_extraction}")
     product_images, page_title, page_description, extracted_copy = await extract_images_with_playwright(url)
     print(f"📸 Found {len(product_images)} product images")
     print(f"📝 Extracted product name: {extracted_copy.get('product_name', 'Unknown')[:50]}")
 
-    # Premium feature: Extract brand colors from product image
+    # Premium feature: Extract brand colors from product image (if enabled)
     brand_colors = None
-    if product_images:
+    if features.color_extraction and product_images:
         brand_colors = await extract_colors_from_image(product_images[0])
 
-    # Premium feature: Remove backgrounds if API key is set
-    if REMOVE_BG_API_KEY and product_images:
+    # Premium feature: Remove backgrounds if API key is set AND feature enabled
+    if features.background_removal and REMOVE_BG_API_KEY and product_images:
         print(f"🎨 Removing backgrounds (premium mode)...")
         product_images = await process_images_for_premium(product_images)
         print(f"✅ Background removal complete")
 
-    # Premium feature: Generate AI background with brand colors
+    # Premium feature: Generate AI background with brand colors (if enabled)
     ai_background_url = ""
-    try:
-        ai_background_url = await generate_ai_background(page_title, "", brand_colors)
-    except Exception as e:
-        print(f"⚠️ Skipping AI background: {e}")
+    if features.ai_background:
+        try:
+            ai_background_url = await generate_ai_background(page_title, "", brand_colors)
+        except Exception as e:
+            print(f"⚠️ Skipping AI background: {e}")
 
-    # Build smart copy constraints from extracted content
+    # Build smart copy constraints from extracted content (if enabled)
     smart_copy = []
-    if extracted_copy.get("product_name"):
-        smart_copy.append(f"PRODUCT NAME: {extracted_copy['product_name']}")
-    if extracted_copy.get("brand"):
-        smart_copy.append(f"BRAND: {extracted_copy['brand']}")
-    if extracted_copy.get("price"):
-        smart_copy.append(f"PRICE: {extracted_copy['price']}")
-    if extracted_copy.get("description"):
-        smart_copy.append(f"DESCRIPTION: {extracted_copy['description'][:300]}")
-    if extracted_copy.get("features"):
-        features_text = " | ".join(extracted_copy['features'][:5])
-        smart_copy.append(f"FEATURES: {features_text}")
-    if extracted_copy.get("cta_text"):
-        smart_copy.append(f"CTA TEXT: {extracted_copy['cta_text']}")
-    if extracted_copy.get("headings"):
-        headings_text = " | ".join(extracted_copy['headings'][:5])
-        smart_copy.append(f"HEADINGS: {headings_text}")
+    if features.smart_copy:
+        if extracted_copy.get("product_name"):
+            smart_copy.append(f"PRODUCT NAME: {extracted_copy['product_name']}")
+        if extracted_copy.get("brand"):
+            smart_copy.append(f"BRAND: {extracted_copy['brand']}")
+        if extracted_copy.get("price"):
+            smart_copy.append(f"PRICE: {extracted_copy['price']}")
+        if extracted_copy.get("description"):
+            smart_copy.append(f"DESCRIPTION: {extracted_copy['description'][:300]}")
+        if extracted_copy.get("features"):
+            features_text = " | ".join(extracted_copy['features'][:5])
+            smart_copy.append(f"FEATURES: {features_text}")
+        if extracted_copy.get("cta_text"):
+            smart_copy.append(f"CTA TEXT: {extracted_copy['cta_text']}")
+        if extracted_copy.get("headings"):
+            headings_text = " | ".join(extracted_copy['headings'][:5])
+            smart_copy.append(f"HEADINGS: {headings_text}")
 
     smart_copy_text = "\n".join(smart_copy) if smart_copy else "No specific copy extracted - use generic premium messaging"
+
+    # Build enabled features list for logging
+    enabled_features = []
+    if features.background_removal: enabled_features.append("BG Removal")
+    if features.ai_background: enabled_features.append("AI Background")
+    if features.color_extraction: enabled_features.append("Color Extraction")
+    if features.cta_button: enabled_features.append("CTA Button")
+    if features.progress_bar: enabled_features.append("Progress Bar")
+    if features.text_effects: enabled_features.append("Text Effects")
+    if features.floating_animation: enabled_features.append("Float Animation")
+    if features.ken_burns: enabled_features.append("Ken Burns")
+    if features.smart_copy: enabled_features.append("Smart Copy")
+    print(f"⚙️ Enabled features: {', '.join(enabled_features)}")
 
     client = OpenAI()
 
@@ -1022,40 +1055,40 @@ p {{ font-family: 'Inter', sans-serif; font-size: 32px; font-weight: 400; color:
 
 PREMIUM ELEMENTS TO INCLUDE:
 1. Add <div class="bg-glow"></div> as first child of reel-container (animated ambient glow with brand colors)
-2. Add <div class="accent-line"></div> after headlines for style (uses brand gradient)
-3. Use class="text-gradient" on key words in headlines for gradient text effect (uses brand accent color)
-4. Add progress bar at top showing video segments
-5. Add <button class="cta-button">SHOP NOW</button> on the FINAL frame (animated CTA with glow/shine)
+{"2. Add <div class='accent-line'></div> after headlines for style (uses brand gradient)" if features.text_effects else ""}
+{"3. Use class='text-gradient' on key words in headlines for gradient text effect" if features.text_effects else ""}
+{"4. Add progress bar at top showing video segments" if features.progress_bar else ""}
+{"5. Add <button class='cta-button'>SHOP NOW</button> on the FINAL frame (animated CTA)" if features.cta_button else ""}
 
 IMAGE TREATMENT - CHOOSE BASED ON IMAGE TYPE:
 
 **PRODUCT treatment** (isolated shots):
 <div class="product-wrap"><img src="URL" class="product-img"></div>
 
-**PRODUCT + AI BACKGROUND** (premium cinematic look):
-<div class="frame ai-background active">
+{"**PRODUCT + AI BACKGROUND** (premium cinematic look):" if features.ai_background else ""}
+{'''<div class="frame ai-background active">
   <img src="AI_BG_URL" class="ai-bg">
   <div class="product-wrap"><img src="URL" class="product-img"></div>
   <div class="text-area">...</div>
-</div>
+</div>''' if features.ai_background else ""}
 
 **LIFESTYLE treatment** (contextual/environmental):
 <div class="frame lifestyle active"><img src="URL" class="lifestyle-img"><div class="lifestyle-overlay"></div><div class="text-area">...</div></div>
 
-**CTA FRAME (final frame)** - with animated button:
-<div class="frame active">
+{"**CTA FRAME (final frame)** - with animated button:" if features.cta_button else ""}
+{'''<div class="frame active">
   <div class="product-wrap"><img src="URL" class="product-img"></div>
   <div class="text-area">
     <h1>Ready to <span class="text-gradient">Elevate</span>?</h1>
     <button class="cta-button">SHOP NOW</button>
   </div>
-</div>
+</div>''' if features.cta_button else ""}
 
 FRAME STRUCTURE:
 1. HERO: Impactful opening - lifestyle OR dramatic product reveal
-2. FEATURE: Product detail + benefit (use accent-line)
+2. FEATURE: Product detail + benefit {"(use accent-line)" if features.text_effects else ""}
 3. VALUE: Social proof or key differentiator
-4. CTA: FINAL frame with animated CTA button - MUST include <button class="cta-button">
+4. CTA: {"FINAL frame with animated CTA button - MUST include <button class='cta-button'>" if features.cta_button else "Strong closing frame"}
 
 ⚠️ SAFE ZONE RULES (TEXT ONLY - products can fill entire frame):
 - PRODUCTS/IMAGES: Can extend to ALL edges, fill entire 1080x1920, NO restrictions
@@ -1069,16 +1102,16 @@ COMPOSITION:
 - Text positioned at bottom 15% in safe zone
 - No blank/empty areas - product fills available space
 
-🚨 SMART COPY CONSTRAINTS - CRITICAL:
-- ONLY use text/copy that is provided in the EXTRACTED COPY section below
-- DO NOT invent features, benefits, or claims not found on the page
-- DO NOT hallucinate product specifications or capabilities
-- If no price is provided, don't show a price
-- Use the EXACT product name as extracted
-- CTA button text should match the extracted CTA or use generic "Shop Now"/"Learn More"
-- Headlines can be shortened/reformatted but must derive from actual page content
-- You CAN use generic premium phrases like "Elevate Your Style" or "Experience the Difference" for transitions
-- Feature claims MUST come from the extracted features list
+{"🚨 SMART COPY CONSTRAINTS - CRITICAL:" if features.smart_copy else ""}
+{"- ONLY use text/copy that is provided in the EXTRACTED COPY section below" if features.smart_copy else ""}
+{"- DO NOT invent features, benefits, or claims not found on the page" if features.smart_copy else ""}
+{"- DO NOT hallucinate product specifications or capabilities" if features.smart_copy else ""}
+{"- If no price is provided, don't show a price" if features.smart_copy else ""}
+{"- Use the EXACT product name as extracted" if features.smart_copy else ""}
+{"- CTA button text should match the extracted CTA or use generic 'Shop Now'/'Learn More'" if features.smart_copy else ""}
+{"- Headlines can be shortened/reformatted but must derive from actual page content" if features.smart_copy else ""}
+{"- You CAN use generic premium phrases like 'Elevate Your Style' for transitions" if features.smart_copy else ""}
+{"- Feature claims MUST come from the extracted features list" if features.smart_copy else ""}
 
 Add at end: <script>const timing = [3500, 3500, 3500, 3500, 3500];</script>
 
@@ -1095,26 +1128,48 @@ Return ONLY complete HTML. No explanations."""
     if brand_colors:
         color_info = f"\n🎨 BRAND COLORS EXTRACTED FROM PRODUCT:\n- Primary: {brand_colors['primary']} ({brand_colors['primary_name']})\n- Secondary: {brand_colors['secondary']} ({brand_colors['secondary_name']})\n- Accent: {brand_colors['accent']} ({brand_colors['accent_name']})\nUse these colors for all glows, gradients, and accents to match the product!"
 
-    user_prompt = f"""Product: {page_title}
-URL: {url}
+    # Build user prompt with feature-conditional sections
+    user_prompt_parts = [
+        f"Product: {page_title}",
+        f"URL: {url}",
+        "",
+        "IMAGES (use these exact URLs):",
+        images_text,
+    ]
 
-IMAGES (use these exact URLs):
-{images_text}
-{bg_info}
-{color_info}
+    if bg_info:
+        user_prompt_parts.append(bg_info)
+    if color_info:
+        user_prompt_parts.append(color_info)
 
-📝 EXTRACTED COPY (USE ONLY THIS TEXT - NO HALLUCINATION):
-{smart_copy_text}
+    if features.smart_copy and smart_copy_text:
+        user_prompt_parts.extend([
+            "",
+            "📝 EXTRACTED COPY (USE ONLY THIS TEXT - NO HALLUCINATION):",
+            smart_copy_text,
+        ])
 
-{f"EXTRA INSTRUCTIONS: {prompt}" if prompt else ""}
+    if prompt:
+        user_prompt_parts.extend(["", f"EXTRA INSTRUCTIONS: {prompt}"])
 
-CRITICAL RULES:
-1. Product images should be LARGE (950px wide, up to 1200px tall) and FILL the frame
-2. No blank space - products fill available area
-3. Text in safe zone at bottom
-4. ONLY use text from the EXTRACTED COPY section above - do not invent features or claims
-5. Final frame MUST have animated CTA button
-{f"6. Use the AI background image on some frames for premium cinematic look." if ai_background_url else ""}"""
+    user_prompt_parts.extend([
+        "",
+        "CRITICAL RULES:",
+        "1. Product images should be LARGE (950px wide, up to 1200px tall) and FILL the frame",
+        "2. No blank space - products fill available area",
+        "3. Text in safe zone at bottom",
+    ])
+
+    if features.smart_copy:
+        user_prompt_parts.append("4. ONLY use text from the EXTRACTED COPY section above - do not invent features or claims")
+
+    if features.cta_button:
+        user_prompt_parts.append(f"{'5' if features.smart_copy else '4'}. Final frame MUST have animated CTA button")
+
+    if ai_background_url and features.ai_background:
+        user_prompt_parts.append(f"{'6' if features.smart_copy and features.cta_button else '5'}. Use the AI background image on some frames for premium cinematic look.")
+
+    user_prompt = "\n".join(user_prompt_parts)
 
     response = client.chat.completions.create(
         model="gpt-4o",
@@ -1145,12 +1200,12 @@ async def home():
     <title>Video Engine</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Inter', -apple-system, sans-serif; background: #0a0a0a; color: white; min-height: 100vh; padding: 60px 20px; }
-        .container { max-width: 600px; margin: 0 auto; }
+        body { font-family: 'Inter', -apple-system, sans-serif; background: #0a0a0a; color: white; min-height: 100vh; padding: 40px 20px; }
+        .container { max-width: 700px; margin: 0 auto; }
         h1 { font-size: 32px; font-weight: 700; margin-bottom: 8px; }
-        .subtitle { color: #888; margin-bottom: 40px; }
+        .subtitle { color: #888; margin-bottom: 30px; }
         label { display: block; font-size: 14px; color: #888; margin-bottom: 8px; }
-        input { width: 100%; padding: 16px; font-size: 16px; border: 1px solid #333; border-radius: 8px; background: #111; color: white; margin-bottom: 20px; }
+        input[type="url"], input[type="text"] { width: 100%; padding: 16px; font-size: 16px; border: 1px solid #333; border-radius: 8px; background: #111; color: white; margin-bottom: 20px; }
         input:focus { outline: none; border-color: #6366f1; }
         button { width: 100%; padding: 16px; font-size: 16px; font-weight: 600; border: none; border-radius: 8px; background: linear-gradient(135deg, #6366f1, #ec4899); color: white; cursor: pointer; transition: transform 0.2s, opacity 0.2s; }
         button:hover { transform: translateY(-2px); }
@@ -1162,9 +1217,29 @@ async def home():
         .download-btn { display: inline-block; margin-top: 15px; padding: 12px 24px; background: #22c55e; border-radius: 6px; color: white; text-decoration: none; font-weight: 600; }
         .download-btn:hover { background: #16a34a; }
         .error { color: #ef4444; }
-        .api-info { margin-top: 60px; padding-top: 30px; border-top: 1px solid #222; }
+
+        /* Feature toggles */
+        .features-section { margin: 25px 0; padding: 20px; background: #111; border-radius: 12px; border: 1px solid #222; }
+        .features-section h3 { font-size: 16px; margin-bottom: 15px; color: #ccc; display: flex; align-items: center; gap: 8px; }
+        .features-section h3::before { content: '⚙️'; }
+        .features-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        .feature-toggle { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #1a1a1a; border-radius: 8px; cursor: pointer; transition: background 0.2s; }
+        .feature-toggle:hover { background: #222; }
+        .feature-toggle input { display: none; }
+        .feature-toggle .toggle-switch { width: 40px; height: 22px; background: #333; border-radius: 11px; position: relative; transition: background 0.2s; flex-shrink: 0; }
+        .feature-toggle .toggle-switch::after { content: ''; position: absolute; width: 18px; height: 18px; background: #666; border-radius: 50%; top: 2px; left: 2px; transition: transform 0.2s, background 0.2s; }
+        .feature-toggle input:checked + .toggle-switch { background: #6366f1; }
+        .feature-toggle input:checked + .toggle-switch::after { transform: translateX(18px); background: white; }
+        .feature-toggle .label { font-size: 13px; color: #aaa; }
+        .feature-toggle .label strong { display: block; color: white; font-size: 14px; margin-bottom: 2px; }
+
+        .api-info { margin-top: 40px; padding-top: 25px; border-top: 1px solid #222; }
         .api-info h3 { font-size: 16px; margin-bottom: 15px; }
         code { background: #1a1a1a; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+
+        @media (max-width: 600px) {
+            .features-grid { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
@@ -1178,6 +1253,52 @@ async def home():
 
             <label>Custom Instructions (optional)</label>
             <input type="text" id="promptInput" placeholder="Focus on comfort features...">
+
+            <div class="features-section">
+                <h3>Premium Features</h3>
+                <div class="features-grid">
+                    <label class="feature-toggle">
+                        <input type="checkbox" id="feat_bg_removal" checked>
+                        <span class="toggle-switch"></span>
+                        <span class="label"><strong>Background Removal</strong>Remove product backgrounds</span>
+                    </label>
+                    <label class="feature-toggle">
+                        <input type="checkbox" id="feat_ai_background" checked>
+                        <span class="toggle-switch"></span>
+                        <span class="label"><strong>AI Background</strong>Cinematic AI backgrounds</span>
+                    </label>
+                    <label class="feature-toggle">
+                        <input type="checkbox" id="feat_color_extraction" checked>
+                        <span class="toggle-switch"></span>
+                        <span class="label"><strong>Color Extraction</strong>Match brand colors</span>
+                    </label>
+                    <label class="feature-toggle">
+                        <input type="checkbox" id="feat_cta_button" checked>
+                        <span class="toggle-switch"></span>
+                        <span class="label"><strong>CTA Button</strong>Animated call-to-action</span>
+                    </label>
+                    <label class="feature-toggle">
+                        <input type="checkbox" id="feat_progress_bar" checked>
+                        <span class="toggle-switch"></span>
+                        <span class="label"><strong>Progress Bar</strong>Story-style indicator</span>
+                    </label>
+                    <label class="feature-toggle">
+                        <input type="checkbox" id="feat_text_effects" checked>
+                        <span class="toggle-switch"></span>
+                        <span class="label"><strong>Text Effects</strong>Gradients & accent lines</span>
+                    </label>
+                    <label class="feature-toggle">
+                        <input type="checkbox" id="feat_floating_animation" checked>
+                        <span class="toggle-switch"></span>
+                        <span class="label"><strong>Float Animation</strong>Product floating effect</span>
+                    </label>
+                    <label class="feature-toggle">
+                        <input type="checkbox" id="feat_smart_copy" checked>
+                        <span class="toggle-switch"></span>
+                        <span class="label"><strong>Smart Copy</strong>Use only real page text</span>
+                    </label>
+                </div>
+            </div>
 
             <button type="submit" id="submitBtn">Generate Video</button>
         </form>
@@ -1204,10 +1325,26 @@ async def home():
         const downloadArea = document.getElementById('downloadArea');
         const submitBtn = document.getElementById('submitBtn');
 
+        // Collect feature toggles
+        function getFeatures() {
+            return {
+                background_removal: document.getElementById('feat_bg_removal').checked,
+                ai_background: document.getElementById('feat_ai_background').checked,
+                color_extraction: document.getElementById('feat_color_extraction').checked,
+                cta_button: document.getElementById('feat_cta_button').checked,
+                progress_bar: document.getElementById('feat_progress_bar').checked,
+                text_effects: document.getElementById('feat_text_effects').checked,
+                floating_animation: document.getElementById('feat_floating_animation').checked,
+                ken_burns: true, // Always on for now
+                smart_copy: document.getElementById('feat_smart_copy').checked
+            };
+        }
+
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
             const url = document.getElementById('urlInput').value;
             const prompt = document.getElementById('promptInput').value;
+            const features = getFeatures();
 
             submitBtn.disabled = true;
             submitBtn.textContent = 'Generating...';
@@ -1220,7 +1357,7 @@ async def home():
                 const res = await fetch('/generate-from-url', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url, prompt })
+                    body: JSON.stringify({ url, prompt, features })
                 });
                 const data = await res.json();
 
@@ -1299,7 +1436,8 @@ async def generate_from_url(request: URLVideoRequest, background_tasks: Backgrou
         print(f"🔍 [{video_id}] Analyzing URL: {request.url}")
         video_jobs[video_id] = {"status": "generating_html", "progress": 0}
 
-        html_content = await generate_html_from_url(request.url, request.prompt)
+        # Pass features to the HTML generator
+        html_content = await generate_html_from_url(request.url, request.prompt, request.features)
         print(f"✅ [{video_id}] HTML generated ({len(html_content)} chars)")
 
         background_tasks.add_task(render_video_from_html, html_content, video_id, request.format, request.fps)
@@ -1310,7 +1448,8 @@ async def generate_from_url(request: URLVideoRequest, background_tasks: Backgrou
             "video_id": video_id,
             "record_id": request.record_id,
             "url": request.url,
-            "format": request.format
+            "format": request.format,
+            "features": request.features.model_dump()  # Return enabled features
         }
     except Exception as e:
         video_jobs[video_id] = {"status": "error", "error": str(e)}
