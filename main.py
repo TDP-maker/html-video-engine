@@ -887,14 +887,26 @@ async def extract_colors_from_image(image_url: str) -> dict:
                     # Shifted hue
                     selected_colors.append((g, b, r))
             else:
-                # Fallback to default purple/pink theme
-                selected_colors = [(99, 102, 241), (236, 72, 153), (139, 92, 246)]
+                # Fallback to warm gold theme (matches default colors)
+                selected_colors = [(201, 169, 110), (139, 115, 85), (212, 175, 55)]
                 break
 
         # Convert to hex and adjust for dark backgrounds
         primary_hex = rgb_to_hex(*selected_colors[0])
         secondary_hex = rgb_to_hex(*selected_colors[1])
         accent_hex = rgb_to_hex(*selected_colors[2])
+
+        # Check if colors are too neutral/boring (all grays or near-white)
+        def is_neutral(rgb):
+            r, g, b = rgb
+            max_rgb = max(r, g, b)
+            min_rgb = min(r, g, b)
+            saturation = (max_rgb - min_rgb) / max(max_rgb, 1)
+            return saturation < 0.15  # Very low saturation = gray/white
+
+        if all(is_neutral(c) for c in selected_colors):
+            print(f"⚠️ Extracted colors too neutral, using warm gold fallback")
+            return None  # Will trigger default warm gold theme
 
         # Adjust colors for visibility on dark background
         primary_adjusted = adjust_color_for_dark_bg(primary_hex)
@@ -1339,7 +1351,7 @@ p.subtitle-brand {{
   100% {{ opacity: 1; transform: translateY(0); }}
 }}
 @keyframes zoomIn {{
-  0% {{ opacity: 0; transform: scale(1.08); }}
+  0% {{ opacity: 0; transform: scale(1.03); }}
   100% {{ opacity: 1; transform: scale(1); }}
 }}
 </style>
