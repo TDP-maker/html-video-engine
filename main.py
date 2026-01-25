@@ -4,6 +4,7 @@ import asyncio
 import subprocess
 import imageio_ffmpeg
 import httpx
+import base64
 from fastapi import FastAPI, BackgroundTasks, HTTPException, Header, Depends
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.security import APIKeyHeader
@@ -13,6 +14,9 @@ import uvicorn
 from openai import OpenAI
 import re
 from datetime import datetime
+
+# --- REMOVE.BG BACKGROUND REMOVAL ---
+REMOVE_BG_API_KEY = os.environ.get("REMOVE_BG_API_KEY", "")
 
 app = FastAPI()
 
@@ -308,12 +312,77 @@ async def extract_images_with_playwright(url: str) -> tuple[list, str, str]:
     return product_images, page_title, page_description
 
 
+async def remove_background(image_url: str) -> str:
+    """Remove background from product image using remove.bg API"""
+    if not REMOVE_BG_API_KEY:
+        print("⚠️ No REMOVE_BG_API_KEY set, skipping background removal")
+        return image_url
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(
+                "https://api.remove.bg/v1.0/removebg",
+                headers={"X-Api-Key": REMOVE_BG_API_KEY},
+                data={
+                    "image_url": image_url,
+                    "size": "auto",
+                    "format": "png"
+                }
+            )
+
+            if response.status_code == 200:
+                # Save the PNG with transparent background
+                current_folder = os.getcwd()
+                bg_removed_folder = os.path.join(current_folder, "bg_removed")
+                os.makedirs(bg_removed_folder, exist_ok=True)
+
+                filename = f"{uuid.uuid4().hex[:8]}.png"
+                filepath = os.path.join(bg_removed_folder, filename)
+
+                with open(filepath, "wb") as f:
+                    f.write(response.content)
+
+                print(f"✅ Background removed: {filename}")
+                # Return as file:// URL for Playwright to load
+                return f"file://{filepath}"
+            else:
+                print(f"⚠️ remove.bg error: {response.status_code} - {response.text}")
+                return image_url
+
+    except Exception as e:
+        print(f"⚠️ Background removal failed: {e}")
+        return image_url
+
+
+async def process_images_for_premium(product_images: list) -> list:
+    """Process images: remove backgrounds for product shots"""
+    if not REMOVE_BG_API_KEY or not product_images:
+        return product_images
+
+    processed = []
+    # Only process first 3 images to save API costs
+    for i, img_url in enumerate(product_images[:3]):
+        print(f"🎨 Processing image {i+1}/3...")
+        processed_url = await remove_background(img_url)
+        processed.append(processed_url)
+
+    # Add remaining unprocessed images
+    processed.extend(product_images[3:])
+    return processed
+
+
 async def generate_html_from_url(url: str, prompt: str = "") -> str:
     """Use Playwright + OpenAI to generate HTML video content from a URL"""
 
     print(f"🔍 Extracting images with Playwright...")
     product_images, page_title, page_description = await extract_images_with_playwright(url)
     print(f"📸 Found {len(product_images)} product images")
+
+    # Premium feature: Remove backgrounds if API key is set
+    if REMOVE_BG_API_KEY and product_images:
+        print(f"🎨 Removing backgrounds (premium mode)...")
+        product_images = await process_images_for_premium(product_images)
+        print(f"✅ Background removal complete")
 
     # Also fetch raw HTML for text content
     base_url = '/'.join(url.split('/')[:3])
@@ -372,15 +441,16 @@ body { background: #0a0a0a; }
 .frame.active .lifestyle-img { animation: zoomIn 1.2s ease-out forwards; }
 .frame.active .accent-line { animation: lineGrow 0.6s ease-out 0.6s forwards; }
 
-/* PRODUCT TREATMENT - Can fill entire frame, no restrictions */
+/* PRODUCT TREATMENT - Premium floating product with glow */
 .product-wrap { position: relative; transform: scale(0.9) translateY(20px); opacity: 0; z-index: 1; }
 .product-wrap::before {
   content: ''; position: absolute; top: 50%; left: 50%;
-  transform: translate(-50%, -50%); width: 150%; height: 150%;
-  background: radial-gradient(ellipse at center, rgba(255,255,255,0.95) 0%, rgba(240,240,240,0.7) 30%, rgba(150,150,150,0.2) 50%, transparent 70%);
+  transform: translate(-50%, -50%); width: 120%; height: 120%;
+  background: radial-gradient(ellipse at center, rgba(99,102,241,0.2) 0%, rgba(236,72,153,0.1) 40%, transparent 70%);
   z-index: -1; border-radius: 50%;
+  filter: blur(40px);
 }
-.product-img { width: 950px; height: auto; max-height: 1200px; object-fit: contain; filter: drop-shadow(0 50px 100px rgba(0,0,0,0.6)); }
+.product-img { width: 950px; height: auto; max-height: 1200px; object-fit: contain; filter: drop-shadow(0 30px 60px rgba(0,0,0,0.5)) drop-shadow(0 0 100px rgba(99,102,241,0.3)); }
 
 /* LIFESTYLE TREATMENT - Full bleed, edge to edge */
 .frame.lifestyle { padding: 0 !important; }
