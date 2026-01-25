@@ -1578,7 +1578,7 @@ body {{ background: #0a0a0a; }}
 .content-area {{ flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; }}
 
 /* PRODUCT ANIMATIONS - Only for non-lifestyle */
-.frame.active .product-wrap {{ animation: floatIn 1.2s ease-out forwards, float 6s ease-in-out 1.5s infinite; }}
+.frame.active .product-wrap {{ animation: floatIn 1.2s ease-out forwards, float 10s ease-in-out 1.5s infinite; }}
 .frame.active .text-area {{ animation: fadeUp 0.8s ease-out 0.4s forwards; opacity: 0; }}
 .frame.active .accent-line {{ animation: lineGrow 0.6s ease-out 0.6s forwards; }}
 
@@ -1612,13 +1612,13 @@ body {{ background: #0a0a0a; }}
 .frame.lifestyle .price-badge {{ display: none; }}  /* No price badges */
 
 /* AI BACKGROUND TREATMENT - Cinematic atmosphere */
-.ai-bg {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.6; z-index: 0; }}
-.frame.ai-background .ai-bg {{ animation: bgPulse 6s ease-in-out infinite; }}
-@keyframes bgPulse {{ 0%, 100% {{ transform: scale(1); opacity: 0.6; }} 50% {{ transform: scale(1.05); opacity: 0.7; }} }}
+.ai-bg {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.9; z-index: 0; }}
+.frame.ai-background .ai-bg {{ animation: bgSubtle 8s ease-in-out infinite; }}
+@keyframes bgSubtle {{ 0%, 100% {{ opacity: 0.9; }} 50% {{ opacity: 0.95; }} }}
 
 /* PREMIUM TEXT STYLING - 15% from bottom (288px), above Instagram UI */
 /* Centered with slight left offset to account for Instagram right-side buttons */
-.text-area {{ position: absolute; bottom: 300px; left: 50%; transform: translateX(-55%) translateY(30px); text-align: center; width: 80%; max-width: 900px; z-index: 10; }}
+.text-area {{ position: absolute; bottom: 300px; left: 60px; right: 180px; transform: translateY(30px); text-align: center; z-index: 10; }}
 h1 {{
   font-family: '{font_family}', sans-serif; font-size: 72px; font-weight: 900;
   color: {text_color}; text-transform: uppercase; line-height: 1.1; letter-spacing: -1px;
@@ -1700,7 +1700,7 @@ p.subtitle-brand {{
   animation: ctaPulse 2s ease-in-out infinite;
 }}
 .frame.active .cta-button {{
-  animation: ctaAppear 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 0.6s forwards, ctaFloat 3s ease-in-out 1.4s infinite;
+  animation: ctaAppear 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 0.6s forwards, ctaFloat 6s ease-in-out 1.4s infinite;
 }}
 .frame.active .cta-button::before {{
   animation: ctaShine 2s ease-in-out 1s infinite;
@@ -1711,7 +1711,7 @@ p.subtitle-brand {{
 }}
 @keyframes ctaFloat {{
   0%, 100% {{ transform: translateY(0); }}
-  50% {{ transform: translateY(-8px); }}
+  50% {{ transform: translateY(-4px); }}
 }}
 @keyframes ctaShine {{
   0% {{ left: -100%; }}
@@ -1845,7 +1845,7 @@ p.subtitle-brand {{
 }}
 @keyframes float {{
   0%, 100% {{ transform: translateY(0); }}
-  50% {{ transform: translateY(-6px); }}
+  50% {{ transform: translateY(-3px); }}
 }}
 @keyframes fadeUp {{
   0% {{ opacity: 0; transform: translateY(40px); filter: blur(4px); }}
