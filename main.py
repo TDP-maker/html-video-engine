@@ -1479,13 +1479,32 @@ Return ONLY complete HTML. No explanations."""
     if is_lifestyle_product:
         user_prompt_parts.extend([
             "",
-            f"🎯 CATEGORY: {product_category.upper()} - USE LIFESTYLE TREATMENT",
-            "⚠️ IMPORTANT: These images show people/models - use them as FULL-BLEED lifestyle shots!",
-            "- Use .lifestyle-img class for images (edge-to-edge, cover the entire frame)",
-            "- Add .lifestyle-overlay gradient at bottom for text readability",
-            "- DO NOT use .product-wrap or floating product treatment",
-            "- Images should fill the ENTIRE 1080x1920 frame",
-            "- Let the model/lifestyle context tell the story",
+            "🚨🚨🚨 FASHION/LIFESTYLE MODE - STRICT RULES 🚨🚨🚨",
+            "",
+            "YOU MUST FOLLOW THESE RULES EXACTLY:",
+            "",
+            "1. ONE IMAGE PER FRAME - Never combine multiple images in one frame",
+            "2. FULL-BLEED IMAGES - Each image fills the ENTIRE 1080x1920 frame edge-to-edge",
+            "3. USE .lifestyle-img CLASS - This makes images cover the full frame",
+            "4. NO PRODUCT CUTOUTS - Do NOT use .product-wrap or floating products",
+            "5. NO AI BACKGROUNDS - Use the original image as the background",
+            "6. SIMPLE TEXT - One headline per frame, positioned at bottom",
+            "7. NO OVERLAPPING TEXT - Only one text element visible at a time",
+            "",
+            "CORRECT FRAME STRUCTURE:",
+            '<div class="frame lifestyle active">',
+            '  <img src="IMAGE_URL" class="lifestyle-img">',
+            '  <div class="lifestyle-overlay"></div>',
+            '  <div class="text-area">',
+            '    <h1>Single <span class="text-gradient">Headline</span></h1>',
+            '  </div>',
+            '</div>',
+            "",
+            "WRONG (DO NOT DO THIS):",
+            "- Multiple small images composited together",
+            "- Images floating on generated backgrounds",
+            "- Multiple headlines overlapping",
+            "- .product-wrap with small centered images",
         ])
     else:
         user_prompt_parts.extend([
@@ -1500,9 +1519,10 @@ Return ONLY complete HTML. No explanations."""
 
     if is_lifestyle_product:
         user_prompt_parts.extend([
-            "1. Use LIFESTYLE treatment - images fill entire frame edge-to-edge",
-            "2. Apply .lifestyle-img class for full-bleed coverage",
-            "3. Text overlaid at bottom with gradient backdrop",
+            "1. ONE image per frame, FULL-BLEED (fills entire 1080x1920)",
+            "2. Use .lifestyle-img class on all images",
+            "3. ONE headline per frame - no overlapping text",
+            "4. Add .lifestyle-overlay for text readability",
         ])
     else:
         user_prompt_parts.extend([
