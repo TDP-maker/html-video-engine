@@ -147,19 +147,36 @@ async def render_video_from_html(html_content: str, video_id: str, format: str =
                 }""")
 
                 for slide_num in range(frame_count):
+                    # Smooth transition: add exit to previous, active to current
                     await page.evaluate(f"""(slideNum) => {{
                         document.querySelectorAll('.frame').forEach((f, i) => {{
-                            f.classList.remove('active', 'exit');
-                            if (i === slideNum) f.classList.add('active');
+                            if (f.classList.contains('active') && i !== slideNum) {{
+                                f.classList.add('exit');
+                                f.classList.remove('active');
+                            }}
+                            if (i === slideNum) {{
+                                f.classList.add('active');
+                            }}
                         }});
                     }}""", slide_num)
 
-                    await page.wait_for_timeout(600)
+                    # Capture transition frames (first 0.5 seconds)
+                    transition_frames = int(0.5 * fps)  # 15 frames at 30fps
+                    for i in range(transition_frames):
+                        await page.screenshot(path=f"{output_folder}/frame_{frame_index:04d}.png")
+                        frame_index += 1
+                        await page.wait_for_timeout(int(1000 / fps))
 
+                    # Remove exit class after transition
+                    await page.evaluate("""() => {
+                        document.querySelectorAll('.frame.exit').forEach(f => f.classList.remove('exit'));
+                    }""")
+
+                    # Capture remaining hold frames
                     slide_duration_ms = timing[slide_num] if slide_num < len(timing) else 3000
-                    video_frames_for_slide = int((slide_duration_ms / 1000) * fps)
+                    hold_frames = int((slide_duration_ms / 1000) * fps) - transition_frames
 
-                    for i in range(video_frames_for_slide):
+                    for i in range(max(0, hold_frames)):
                         await page.screenshot(path=f"{output_folder}/frame_{frame_index:04d}.png")
                         frame_index += 1
                         await page.wait_for_timeout(int(1000 / fps))
@@ -306,8 +323,9 @@ MANDATORY STRUCTURE (copy this exactly):
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { background: #0a0a0a; }
 .reel-container { width: 1080px; height: 1920px; position: relative; overflow: hidden; background: #0a0a0a; }
-.frame { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 200px; transition: opacity 0.5s ease-out; }
+.frame { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 200px; transition: opacity 0.5s ease-in-out; }
 .frame.active { opacity: 1; }
+.frame.exit { opacity: 0; transition: opacity 0.5s ease-in-out; }
 .frame.active .product-wrap { animation: floatIn 0.8s ease-out forwards, float 3s ease-in-out 0.8s infinite; }
 .frame.active .text-area { animation: fadeUp 0.6s ease-out 0.3s forwards; opacity: 0; }
 .frame.active .lifestyle-img { animation: zoomIn 0.8s ease-out forwards; }
