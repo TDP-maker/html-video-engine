@@ -1059,7 +1059,39 @@ async def render_video(brief: VideoBrief, video_id: str = None):
         print(f"❌ Render Error: {e}")
 
 
-async def render_video_from_html(html_content: str, video_id: str, format: str = "reel", fps: int = 30, motion_blur: bool = True):
+class VideoQuality(str, Enum):
+    """Video encoding quality presets"""
+    FAST = "fast"           # Quick renders, lower quality (CRF 25, preset fast)
+    BALANCED = "balanced"   # Good balance of speed and quality (CRF 22, preset medium)
+    PREMIUM = "premium"     # Highest quality, slower encoding (CRF 19, preset slow)
+
+
+class VideoCodec(str, Enum):
+    """Video codec options"""
+    H264 = "h264"           # H.264/AVC - widely compatible
+    H265 = "h265"           # H.265/HEVC - better quality, smaller files
+
+
+# Quality preset configurations
+QUALITY_PRESETS = {
+    VideoQuality.FAST: {"crf": 25, "preset": "fast"},
+    VideoQuality.BALANCED: {"crf": 22, "preset": "medium"},
+    VideoQuality.PREMIUM: {"crf": 19, "preset": "slow"},
+}
+
+
+async def render_video_from_html(
+    html_content: str,
+    video_id: str,
+    format: str = "reel",
+    fps: int = 30,
+    motion_blur: bool = True,
+    quality: VideoQuality = VideoQuality.BALANCED,
+    codec: VideoCodec = VideoCodec.H264,
+    audio_url: str = None,
+    audio_volume: float = 0.8,
+    transition_duration: float = None
+):
     """Render video from custom HTML with multiple frames
 
     Args:
@@ -1068,6 +1100,11 @@ async def render_video_from_html(html_content: str, video_id: str, format: str =
         format: Video format (reel, square, landscape)
         fps: Output frames per second (default 30)
         motion_blur: If True, render at 2x fps internally and blend frames for motion blur effect
+        quality: Encoding quality preset (fast, balanced, premium)
+        codec: Video codec (h264 or h265)
+        audio_url: Optional URL to background audio track
+        audio_volume: Audio volume level 0.0-1.0 (default 0.8)
+        transition_duration: Override default transition duration in seconds (default 1.5)
     """
     width, height = FORMAT_DIMENSIONS.get(format, FORMAT_DIMENSIONS["reel"])
 
@@ -1134,9 +1171,18 @@ async def render_video_from_html(html_content: str, video_id: str, format: str =
                             frames[slideNum].classList.add('active');
                         }}""", slide_num)
 
-                        # Capture transition (1.5 second smooth crossfade)
-                        transition_duration = 1.5
-                        transition_frames = int(transition_duration * render_fps)
+                        # Get per-frame transition duration or use default
+                        # Check for window.transitionTiming array first, then parameter, then default
+                        frame_transition = await page.evaluate(f"""(slideNum) => {{
+                            if (window.transitionTiming && window.transitionTiming[slideNum]) {{
+                                return window.transitionTiming[slideNum] / 1000;
+                            }}
+                            return null;
+                        }}""", slide_num)
+
+                        # Use priority: per-frame > parameter > default (1.5s)
+                        actual_transition = frame_transition or transition_duration or 1.5
+                        transition_frames = int(actual_transition * render_fps)
                         for i in range(transition_frames):
                             await page.wait_for_timeout(int(1000 / render_fps))  # Wait first, then capture
                             await page.screenshot(path=f"{output_folder}/frame_{frame_index:04d}.png")
@@ -1175,31 +1221,88 @@ async def render_video_from_html(html_content: str, video_id: str, format: str =
 
             await browser.close()
 
-        # Compile video with optional motion blur
+        # Compile video with quality presets, codec options, and optional audio
         video_name = f"{videos_folder}/{video_id}.mp4"
         ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
 
+        # Get quality settings
+        quality_settings = QUALITY_PRESETS.get(quality, QUALITY_PRESETS[VideoQuality.BALANCED])
+        crf = quality_settings["crf"]
+        preset = quality_settings["preset"]
+
+        # Select codec
+        if codec == VideoCodec.H265:
+            vcodec = "libx265"
+            pix_fmt = "yuv420p10le"  # 10-bit color for H.265
+            extra_params = ["-tag:v", "hvc1"]  # Apple compatibility
+        else:
+            vcodec = "libx264"
+            pix_fmt = "yuv420p"
+            extra_params = []
+
+        print(f"🎬 [{video_id}] Encoding: quality={quality.value}, codec={codec.value}, CRF={crf}, preset={preset}")
+
+        # Download audio if provided
+        audio_path = None
+        if audio_url:
+            try:
+                print(f"🎵 [{video_id}] Downloading audio track...")
+                audio_path = os.path.join(current_folder, f"audio_{video_id}.mp3")
+                async with httpx.AsyncClient(timeout=60) as client:
+                    response = await client.get(audio_url)
+                    if response.status_code == 200:
+                        with open(audio_path, "wb") as af:
+                            af.write(response.content)
+                        print(f"✅ [{video_id}] Audio downloaded")
+                    else:
+                        print(f"⚠️ [{video_id}] Failed to download audio: {response.status_code}")
+                        audio_path = None
+            except Exception as e:
+                print(f"⚠️ [{video_id}] Audio download error: {e}")
+                audio_path = None
+
+        # Build FFmpeg command
         if motion_blur:
             # Motion blur: blend adjacent frames (tblend) then reduce framerate
-            # This creates smooth motion blur effect from 60fps -> 30fps
             print(f"🎬 [{video_id}] Applying motion blur (render={render_fps}fps -> output={output_fps}fps)")
-            subprocess.run([
-                ffmpeg_exe, "-y", "-r", str(render_fps),
-                "-i", f"{output_folder}/frame_%04d.png",
-                "-vf", f"tblend=all_mode=average,fps={output_fps}",
-                "-vcodec", "libx264", "-pix_fmt", "yuv420p",
-                "-preset", "fast", "-crf", "23",
-                video_name
-            ])
+            vf_filter = f"tblend=all_mode=average,fps={output_fps}"
+            input_fps = render_fps
         else:
-            # Standard rendering without motion blur
-            subprocess.run([
-                ffmpeg_exe, "-y", "-r", str(output_fps),
-                "-i", f"{output_folder}/frame_%04d.png",
-                "-vcodec", "libx264", "-pix_fmt", "yuv420p",
-                "-preset", "fast", "-crf", "23",
-                video_name
+            vf_filter = None
+            input_fps = output_fps
+
+        # Base command
+        cmd = [ffmpeg_exe, "-y", "-r", str(input_fps), "-i", f"{output_folder}/frame_%04d.png"]
+
+        # Add audio input if available
+        if audio_path and os.path.exists(audio_path):
+            cmd.extend(["-i", audio_path])
+
+        # Video filter
+        if vf_filter:
+            cmd.extend(["-vf", vf_filter])
+
+        # Video encoding settings
+        cmd.extend(["-vcodec", vcodec, "-pix_fmt", pix_fmt, "-preset", preset, "-crf", str(crf)])
+        cmd.extend(extra_params)
+
+        # Audio settings if audio is provided
+        if audio_path and os.path.exists(audio_path):
+            cmd.extend([
+                "-c:a", "aac",
+                "-b:a", "192k",
+                "-filter:a", f"volume={audio_volume}",
+                "-shortest"  # End video when shortest stream ends
             ])
+
+        cmd.append(video_name)
+
+        # Run FFmpeg
+        subprocess.run(cmd)
+
+        # Cleanup audio file
+        if audio_path and os.path.exists(audio_path):
+            os.remove(audio_path)
 
         video_jobs[video_id] = {"status": "complete", "progress": 100, "file": video_name}
         print(f"✅ [{video_id}] Render Complete")
@@ -2059,6 +2162,147 @@ def adjust_color_for_dark_bg(hex_color: str, min_brightness: int = 120) -> str:
     return rgb_to_hex(r, g, b)
 
 
+def get_relative_luminance(r: int, g: int, b: int) -> float:
+    """Calculate relative luminance per WCAG 2.1 specification"""
+    def linearize(c):
+        c = c / 255
+        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+
+    return 0.2126 * linearize(r) + 0.7152 * linearize(g) + 0.0722 * linearize(b)
+
+
+def get_contrast_ratio(color1_hex: str, color2_hex: str) -> float:
+    """Calculate WCAG contrast ratio between two colors
+
+    Returns:
+        Contrast ratio (1:1 to 21:1). WCAG AA requires 4.5:1 for normal text, 3:1 for large text.
+        WCAG AAA requires 7:1 for normal text, 4.5:1 for large text.
+    """
+    r1, g1, b1 = hex_to_rgb(color1_hex)
+    r2, g2, b2 = hex_to_rgb(color2_hex)
+
+    l1 = get_relative_luminance(r1, g1, b1)
+    l2 = get_relative_luminance(r2, g2, b2)
+
+    lighter = max(l1, l2)
+    darker = min(l1, l2)
+
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def check_wcag_compliance(foreground_hex: str, background_hex: str = "#0a0a0a") -> dict:
+    """Check WCAG compliance for a color against background
+
+    Args:
+        foreground_hex: Text/foreground color
+        background_hex: Background color (default: video dark background)
+
+    Returns:
+        Dictionary with contrast ratio and compliance levels
+    """
+    ratio = get_contrast_ratio(foreground_hex, background_hex)
+
+    return {
+        "contrast_ratio": round(ratio, 2),
+        "aa_normal_text": ratio >= 4.5,      # 4.5:1 for normal text
+        "aa_large_text": ratio >= 3.0,       # 3:1 for large text (18pt+ or 14pt bold)
+        "aaa_normal_text": ratio >= 7.0,     # 7:1 for enhanced contrast
+        "aaa_large_text": ratio >= 4.5,      # 4.5:1 for large text enhanced
+        "passed": ratio >= 3.0,              # Minimum for large text (headlines)
+        "recommendation": (
+            "Excellent" if ratio >= 7.0 else
+            "Good" if ratio >= 4.5 else
+            "Acceptable for large text" if ratio >= 3.0 else
+            "Needs adjustment"
+        )
+    }
+
+
+def adjust_color_for_wcag(hex_color: str, background_hex: str = "#0a0a0a", target_ratio: float = 4.5) -> str:
+    """Adjust a color to meet WCAG contrast requirements
+
+    Args:
+        hex_color: Color to adjust
+        background_hex: Background color to contrast against
+        target_ratio: Target contrast ratio (default 4.5 for AA normal text)
+
+    Returns:
+        Adjusted hex color that meets the target contrast ratio
+    """
+    current_ratio = get_contrast_ratio(hex_color, background_hex)
+
+    if current_ratio >= target_ratio:
+        return hex_color
+
+    r, g, b = hex_to_rgb(hex_color)
+    bg_r, bg_g, bg_b = hex_to_rgb(background_hex)
+    bg_luminance = get_relative_luminance(bg_r, bg_g, bg_b)
+
+    # For dark backgrounds, we need to lighten the color
+    # For light backgrounds, we need to darken the color
+    is_dark_bg = bg_luminance < 0.5
+
+    # Iteratively adjust until we meet the target
+    for i in range(100):
+        if is_dark_bg:
+            # Lighten
+            factor = 1 + (i * 0.02)
+            new_r = min(255, int(r * factor))
+            new_g = min(255, int(g * factor))
+            new_b = min(255, int(b * factor))
+        else:
+            # Darken
+            factor = 1 - (i * 0.02)
+            new_r = max(0, int(r * factor))
+            new_g = max(0, int(g * factor))
+            new_b = max(0, int(b * factor))
+
+        new_hex = rgb_to_hex(new_r, new_g, new_b)
+        if get_contrast_ratio(new_hex, background_hex) >= target_ratio:
+            return new_hex
+
+    # Fallback to white or black if adjustment fails
+    return "#ffffff" if is_dark_bg else "#000000"
+
+
+def validate_brand_colors(brand_colors: dict, background_hex: str = "#0a0a0a") -> dict:
+    """Validate and optionally fix brand colors for WCAG compliance
+
+    Args:
+        brand_colors: Dictionary with primary, secondary, accent colors
+        background_hex: Background color
+
+    Returns:
+        Dictionary with validation results and adjusted colors if needed
+    """
+    results = {
+        "original": {},
+        "adjusted": {},
+        "compliance": {},
+        "all_passed": True
+    }
+
+    for key in ["primary", "secondary", "accent"]:
+        if key not in brand_colors:
+            continue
+
+        color = brand_colors[key]
+        compliance = check_wcag_compliance(color, background_hex)
+        results["original"][key] = color
+        results["compliance"][key] = compliance
+
+        if not compliance["passed"]:
+            results["all_passed"] = False
+            # Adjust for large text minimum (3:1) since headlines are large
+            adjusted = adjust_color_for_wcag(color, background_hex, target_ratio=3.0)
+            results["adjusted"][key] = adjusted
+            print(f"⚠️ WCAG: {key} color {color} adjusted to {adjusted} (ratio: {compliance['contrast_ratio']} → {get_contrast_ratio(adjusted, background_hex):.2f})")
+        else:
+            results["adjusted"][key] = color
+
+    return results
+
+
 def get_category_color_palette(category: str) -> dict:
     """Get category-appropriate color palette instead of generic gold
 
@@ -2326,6 +2570,15 @@ async def generate_html_from_url(url: str, prompt: str = "", features: VideoFeat
     if features.color_extraction and product_images:
         brand_colors = await extract_colors_from_image(product_images[0], category=product_category)
 
+        # Validate and adjust colors for WCAG compliance
+        if brand_colors:
+            wcag_results = validate_brand_colors(brand_colors)
+            if not wcag_results["all_passed"]:
+                print(f"🎨 WCAG: Adjusting colors for accessibility compliance")
+                brand_colors["primary"] = wcag_results["adjusted"].get("primary", brand_colors["primary"])
+                brand_colors["secondary"] = wcag_results["adjusted"].get("secondary", brand_colors["secondary"])
+                brand_colors["accent"] = wcag_results["adjusted"].get("accent", brand_colors["accent"])
+
     # Premium feature: Remove backgrounds - BUT skip for lifestyle categories
     # Fashion/clothing looks terrible as floating cutouts - keep the context!
     if features.background_removal and REMOVE_BG_API_KEY and product_images:
@@ -2584,11 +2837,19 @@ body {{ background: #0a0a0a; -webkit-font-smoothing: antialiased; -moz-osx-font-
   z-index: 50; pointer-events: none;
 }}
 
-/* FILM GRAIN OVERLAY - Subtle texture */
+/* FILM GRAIN OVERLAY - Visible texture for premium look */
 .film-grain {{
   position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
-  opacity: 0.03; z-index: 51; pointer-events: none; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  opacity: 0.05; z-index: 51; pointer-events: none; mix-blend-mode: overlay;
+  animation: grainShift 0.5s steps(1) infinite;
+}}
+/* Animated grain for authentic film look */
+@keyframes grainShift {{
+  0%, 100% {{ transform: translate(0, 0); }}
+  25% {{ transform: translate(-2px, 2px); }}
+  50% {{ transform: translate(2px, -2px); }}
+  75% {{ transform: translate(-2px, -2px); }}
 }}
 
 /* CINEMATIC COLOR GRADE */
