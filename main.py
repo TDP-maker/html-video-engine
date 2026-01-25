@@ -297,7 +297,7 @@ async def generate_html_from_url(url: str, prompt: str = "") -> str:
 
     client = OpenAI()
 
-    system_prompt = """You are a professional video ad designer creating high-end product videos for Instagram/TikTok.
+    system_prompt = """You are a professional video ad designer creating high-end product videos for Instagram Reels.
 
 Create a POLISHED, AD-READY HTML video with these specifications:
 
@@ -305,37 +305,44 @@ STRUCTURE:
 - Use .frame class for each slide (5-7 frames)
 - First frame: .frame.active (starts visible)
 - Add: const timing = [3000, 3500, 3500, 3500, 3500, 3000];
-- Container: .reel-container at 1080x1920px
+- Container: .reel-container at 1080x1920px (9:16 vertical)
 - All frames: opacity:0 by default, .frame.active has opacity:1
 
-PRODUCT IMAGES - MUST USE:
-- Display the provided product images LARGE (500-700px width)
-- Center images with clean spacing
-- Add subtle drop-shadow: 0 20px 60px rgba(0,0,0,0.3)
+PRODUCT IMAGES - CRITICAL (MUST BE HUGE):
+- Images should DOMINATE the frame - this is an ad, the product is the hero
+- MINIMUM 850px width, up to 1000px for hero shots
+- Fill 60-70% of the vertical screen space with the product
+- Center images vertically in upper 2/3 of frame
+- Add dramatic drop-shadow: 0 40px 80px rgba(0,0,0,0.4)
 - Use object-fit: contain to preserve aspect ratio
-- Animate images: subtle float, scale, or fade effects
+- For multiple products: use a grid (2 products side by side at 480px each)
+- Animate images: subtle float (translateY: -20px to 20px), gentle scale (1 to 1.05)
+
+IMAGE SIZING EXAMPLES:
+- Single product hero: width: 900px, centered
+- Two products: display: flex, gap: 40px, each 480px wide
+- Product with text below: image 850px, text in lower 30%
 
 PROFESSIONAL STYLING:
-- Font: 'Inter' or 'Plus Jakarta Sans' from Google Fonts
-- Clean, minimal design - lots of whitespace
-- Solid or subtle gradient backgrounds (not busy)
-- Text should be large and readable (50-80px headlines)
-- Use brand colors if detectable, otherwise elegant neutrals
+- Font: 'Inter' or 'Montserrat' from Google Fonts (weight: 700-900 for headlines)
+- Dark backgrounds work best: #0a0a0a, #1a1a1a, or subtle dark gradients
+- Text should be BOLD and readable (70-100px headlines, 40-50px subtext)
+- Keep text SHORT - 3-5 words per headline maximum
+- Text goes in bottom 25-30% of frame, never overlapping product
 - NO emojis unless specifically requested
 
 ANIMATIONS:
-- Smooth CSS transitions (0.5-1s duration)
-- Subtle movements - don't overdo it
-- Images: gentle scale (1 to 1.02) or float (translateY)
-- Text: fade in, slide up from bottom
-- Use @keyframes with ease-out timing
+- Smooth CSS transitions (0.6-1s duration, ease-out)
+- Images: gentle floating motion with @keyframes
+- Text: fade in with slight upward movement
+- Keep animations subtle and professional
 
 FRAME CONTENT:
-1. HOOK: Large product image + short punchy headline (3-5 words)
-2. FEATURE 1: Product image + key benefit
-3. FEATURE 2: Another angle/product + second benefit
-4. SOCIAL PROOF: Testimonial style or key stat
-5. CTA: Product image + "Shop Now" / "Learn More" button style
+1. HERO: Huge product image (900px) + 3-word punchy headline at bottom
+2. FEATURE: Product + single key benefit text
+3. DETAIL: Different angle or second product + benefit
+4. PROOF: Product + testimonial or key stat
+5. CTA: Product + bold "Shop Now" style button
 
 Return ONLY valid HTML code, no explanations."""
 
@@ -353,7 +360,7 @@ PRODUCT IMAGES TO USE (these are real, working URLs - use them!):
 
 {f"SPECIAL INSTRUCTIONS: {prompt}" if prompt else ""}
 
-Create a clean, professional, ad-ready HTML video showcasing these products. Make it look like a high-end brand advertisement."""
+CRITICAL: The product images MUST be HUGE - at least 850-900px wide, filling most of the screen. The product is the star of the video. Use dark backgrounds so the product pops. Keep text minimal and in the bottom 25% of each frame."""
 
     response = client.chat.completions.create(
         model="gpt-4o",
