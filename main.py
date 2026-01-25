@@ -371,6 +371,56 @@ async def process_images_for_premium(product_images: list) -> list:
     return processed
 
 
+async def generate_ai_background(product_title: str, product_category: str = "") -> str:
+    """Generate an abstract/atmospheric background using DALL-E"""
+    try:
+        client = OpenAI()
+
+        # Create a prompt for abstract background - NO product, just atmosphere
+        bg_prompt = f"""Abstract premium background for luxury advertising.
+Dark moody atmosphere with subtle gradients.
+Soft ethereal glow, bokeh light effects, gentle color transitions.
+Colors: deep purples, dark blues, hints of pink/magenta.
+Style: cinematic, high-end, minimal, elegant.
+NO products, NO text, NO logos, NO objects - ONLY abstract atmospheric visuals.
+Vertical 9:16 aspect ratio composition."""
+
+        print(f"🎨 Generating AI background...")
+
+        response = client.images.generate(
+            model="dall-e-3",
+            prompt=bg_prompt,
+            size="1024x1792",  # Vertical for reels
+            quality="standard",
+            n=1
+        )
+
+        bg_url = response.data[0].url
+        print(f"✅ AI background generated")
+
+        # Download and save locally
+        async with httpx.AsyncClient(timeout=60) as http_client:
+            img_response = await http_client.get(bg_url)
+            if img_response.status_code == 200:
+                current_folder = os.getcwd()
+                bg_folder = os.path.join(current_folder, "ai_backgrounds")
+                os.makedirs(bg_folder, exist_ok=True)
+
+                filename = f"bg_{uuid.uuid4().hex[:8]}.png"
+                filepath = os.path.join(bg_folder, filename)
+
+                with open(filepath, "wb") as f:
+                    f.write(img_response.content)
+
+                return f"file://{filepath}"
+
+        return bg_url
+
+    except Exception as e:
+        print(f"⚠️ AI background generation failed: {e}")
+        return ""
+
+
 async def generate_html_from_url(url: str, prompt: str = "") -> str:
     """Use Playwright + OpenAI to generate HTML video content from a URL"""
 
@@ -383,6 +433,13 @@ async def generate_html_from_url(url: str, prompt: str = "") -> str:
         print(f"🎨 Removing backgrounds (premium mode)...")
         product_images = await process_images_for_premium(product_images)
         print(f"✅ Background removal complete")
+
+    # Premium feature: Generate AI background
+    ai_background_url = ""
+    try:
+        ai_background_url = await generate_ai_background(page_title)
+    except Exception as e:
+        print(f"⚠️ Skipping AI background: {e}")
 
     # Also fetch raw HTML for text content
     base_url = '/'.join(url.split('/')[:3])
@@ -457,6 +514,11 @@ body { background: #0a0a0a; }
 .lifestyle-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transform: scale(1.05); }
 .lifestyle-overlay { position: absolute; bottom: 0; left: 0; width: 100%; height: 60%; background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.6) 40%, transparent 100%); z-index: 1; }
 
+/* AI BACKGROUND TREATMENT - Cinematic atmosphere */
+.ai-bg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.6; z-index: 0; }
+.frame.ai-background .ai-bg { animation: bgPulse 6s ease-in-out infinite; }
+@keyframes bgPulse { 0%, 100% { transform: scale(1); opacity: 0.6; } 50% { transform: scale(1.05); opacity: 0.7; } }
+
 /* PREMIUM TEXT STYLING - 15% from bottom (288px), above Instagram UI */
 .text-area { position: absolute; bottom: 300px; left: 0; text-align: center; width: 100%; padding: 0 120px; padding-right: 200px; transform: translateY(30px); z-index: 10; }
 h1 {
@@ -513,6 +575,13 @@ IMAGE TREATMENT - CHOOSE BASED ON IMAGE TYPE:
 **PRODUCT treatment** (isolated shots):
 <div class="product-wrap"><img src="URL" class="product-img"></div>
 
+**PRODUCT + AI BACKGROUND** (premium cinematic look):
+<div class="frame ai-background active">
+  <img src="AI_BG_URL" class="ai-bg">
+  <div class="product-wrap"><img src="URL" class="product-img"></div>
+  <div class="text-area">...</div>
+</div>
+
 **LIFESTYLE treatment** (contextual/environmental):
 <div class="frame lifestyle active"><img src="URL" class="lifestyle-img"><div class="lifestyle-overlay"></div><div class="text-area">...</div></div>
 
@@ -541,15 +610,20 @@ Return ONLY complete HTML. No explanations."""
     # Build image list
     images_text = "\n".join([f"{i+1}. {img}" for i, img in enumerate(product_images)]) if product_images else "No images found - use placeholder styling"
 
+    # AI background info
+    bg_info = f"\nAI BACKGROUND (use as .ai-bg src): {ai_background_url}" if ai_background_url else ""
+
     user_prompt = f"""Product: {page_title}
 URL: {url}
 
 IMAGES (use these exact URLs):
 {images_text}
+{bg_info}
 
 {f"EXTRA: {prompt}" if prompt else ""}
 
-CRITICAL: Product images should be LARGE (950px wide, up to 1200px tall) and FILL the frame. No blank space. Text in safe zone at bottom."""
+CRITICAL: Product images should be LARGE (950px wide, up to 1200px tall) and FILL the frame. No blank space. Text in safe zone at bottom.
+{f"Use the AI background image on some frames for premium cinematic look." if ai_background_url else ""}"""
 
     response = client.chat.completions.create(
         model="gpt-4o",
