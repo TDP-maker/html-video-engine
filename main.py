@@ -314,87 +314,125 @@ async def generate_html_from_url(url: str, prompt: str = "") -> str:
 
     client = OpenAI()
 
-    system_prompt = """You are a professional video ad designer. Create Instagram Reel HTML videos.
+    system_prompt = """You are a premium video ad designer. Create cinematic Instagram Reel HTML videos.
 
 MANDATORY STRUCTURE (copy this exactly):
 ```
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
 * { margin: 0; padding: 0; box-sizing: border-box; }
+
+/* ANIMATED GRADIENT BACKGROUND */
 body { background: #0a0a0a; }
-.reel-container { width: 1080px; height: 1920px; position: relative; overflow: hidden; background: #0a0a0a; }
-.frame { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 200px; transition: opacity 0.5s ease-in-out; }
+.reel-container {
+  width: 1080px; height: 1920px; position: relative; overflow: hidden;
+  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%);
+}
+.bg-glow {
+  position: absolute; width: 150%; height: 150%; top: -25%; left: -25%;
+  background: radial-gradient(circle at 30% 20%, rgba(99,102,241,0.15) 0%, transparent 50%),
+              radial-gradient(circle at 70% 80%, rgba(236,72,153,0.1) 0%, transparent 50%);
+  animation: glowMove 8s ease-in-out infinite;
+}
+@keyframes glowMove {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(30px, -30px) scale(1.1); }
+}
+
+/* FRAME TRANSITIONS */
+.frame { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 180px; transition: opacity 0.6s ease-in-out; }
 .frame.active { opacity: 1; }
-.frame.exit { opacity: 0; transition: opacity 0.5s ease-in-out; }
-.frame.active .product-wrap { animation: floatIn 0.8s ease-out forwards, float 3s ease-in-out 0.8s infinite; }
-.frame.active .text-area { animation: fadeUp 0.6s ease-out 0.3s forwards; opacity: 0; }
-.frame.active .lifestyle-img { animation: zoomIn 0.8s ease-out forwards; }
+.frame.exit { opacity: 0; }
 
-/* OPTION 1: Product shots (white/plain background) */
-.product-wrap { position: relative; transform: scale(0.9) translateY(30px); opacity: 0; z-index: 1; }
-.product-wrap::before { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 140%; height: 140%; background: radial-gradient(ellipse at center, rgba(255,255,255,0.95) 0%, rgba(240,240,240,0.7) 30%, rgba(150,150,150,0.3) 50%, transparent 70%); z-index: -1; border-radius: 50%; }
-.product-img { width: 900px; height: auto; max-height: 1100px; object-fit: contain; filter: drop-shadow(0 40px 80px rgba(0,0,0,0.5)); }
+/* PRODUCT ANIMATIONS */
+.frame.active .product-wrap { animation: floatIn 1s cubic-bezier(0.34, 1.56, 0.64, 1) forwards, float 4s ease-in-out 1s infinite; }
+.frame.active .text-area { animation: fadeUp 0.8s ease-out 0.4s forwards; opacity: 0; }
+.frame.active .lifestyle-img { animation: zoomIn 1.2s ease-out forwards; }
+.frame.active .accent-line { animation: lineGrow 0.6s ease-out 0.6s forwards; }
 
-/* OPTION 2: Lifestyle/full-screen images */
+/* PRODUCT TREATMENT */
+.product-wrap { position: relative; transform: scale(0.85) translateY(40px); opacity: 0; z-index: 1; }
+.product-wrap::before {
+  content: ''; position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%); width: 140%; height: 140%;
+  background: radial-gradient(ellipse at center, rgba(255,255,255,0.95) 0%, rgba(240,240,240,0.7) 30%, rgba(150,150,150,0.2) 50%, transparent 70%);
+  z-index: -1; border-radius: 50%;
+}
+.product-img { width: 900px; height: auto; max-height: 1000px; object-fit: contain; filter: drop-shadow(0 50px 100px rgba(0,0,0,0.6)); }
+
+/* LIFESTYLE TREATMENT */
 .frame.lifestyle { padding-top: 0; }
-.lifestyle-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transform: scale(1.05); }
-.lifestyle-overlay { position: absolute; bottom: 0; left: 0; width: 100%; height: 50%; background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%); }
+.lifestyle-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transform: scale(1.08); }
+.lifestyle-overlay { position: absolute; bottom: 0; left: 0; width: 100%; height: 60%; background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.5) 50%, transparent 100%); z-index: 1; }
 
-.text-area { position: absolute; bottom: 150px; text-align: center; width: 100%; padding: 0 60px; transform: translateY(20px); z-index: 10; }
-h1 { font-family: 'Inter', sans-serif; font-size: 90px; font-weight: 900; color: white; text-transform: uppercase; line-height: 1.1; }
-p { font-family: 'Inter', sans-serif; font-size: 42px; font-weight: 700; color: rgba(255,255,255,0.8); margin-top: 20px; }
+/* PREMIUM TEXT STYLING */
+.text-area { position: absolute; bottom: 140px; text-align: center; width: 100%; padding: 0 80px; transform: translateY(30px); z-index: 10; }
+h1 {
+  font-family: 'Inter', sans-serif; font-size: 88px; font-weight: 900;
+  color: white; text-transform: uppercase; line-height: 1.05; letter-spacing: -2px;
+  text-shadow: 0 4px 30px rgba(0,0,0,0.5);
+}
+.text-gradient {
+  background: linear-gradient(135deg, #fff 0%, #a5b4fc 50%, #fff 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+p { font-family: 'Inter', sans-serif; font-size: 40px; font-weight: 400; color: rgba(255,255,255,0.7); margin-top: 24px; letter-spacing: 1px; }
 
+/* ACCENT ELEMENTS */
+.accent-line { width: 0; height: 4px; background: linear-gradient(90deg, #6366f1, #ec4899); margin: 30px auto 0; border-radius: 2px; }
+@keyframes lineGrow { 0% { width: 0; } 100% { width: 120px; } }
+
+/* PROGRESS BAR (top of screen) */
+.progress-bar { position: absolute; top: 60px; left: 80px; right: 80px; height: 4px; background: rgba(255,255,255,0.2); border-radius: 2px; z-index: 100; display: flex; gap: 8px; }
+.progress-segment { flex: 1; height: 100%; background: rgba(255,255,255,0.3); border-radius: 2px; overflow: hidden; }
+.progress-segment.active::after { content: ''; display: block; height: 100%; background: white; animation: progressFill var(--duration, 3s) linear forwards; }
+.progress-segment.done { background: white; }
+@keyframes progressFill { 0% { width: 0; } 100% { width: 100%; } }
+
+/* KEYFRAMES */
 @keyframes floatIn {
-  0% { opacity: 0; transform: scale(0.9) translateY(30px); }
+  0% { opacity: 0; transform: scale(0.85) translateY(40px); }
   100% { opacity: 1; transform: scale(1) translateY(0); }
 }
 @keyframes float {
   0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-15px); }
+  50% { transform: translateY(-12px); }
 }
 @keyframes fadeUp {
-  0% { opacity: 0; transform: translateY(20px); }
+  0% { opacity: 0; transform: translateY(30px); }
   100% { opacity: 1; transform: translateY(0); }
 }
 @keyframes zoomIn {
-  0% { opacity: 0; transform: scale(1.05); }
+  0% { opacity: 0; transform: scale(1.08); }
   100% { opacity: 1; transform: scale(1); }
 }
 </style>
 ```
 
+PREMIUM ELEMENTS TO INCLUDE:
+1. Add <div class="bg-glow"></div> as first child of reel-container (animated ambient glow)
+2. Add <div class="accent-line"></div> after headlines for style
+3. Use class="text-gradient" on key words in headlines for gradient text effect
+4. Add progress bar at top showing video segments
+
 IMAGE TREATMENT - CHOOSE BASED ON IMAGE TYPE:
 
-**Use PRODUCT treatment** (product-wrap + product-img) when:
-- Image has white/plain background
-- Isolated product shot
-- Studio photography
-→ <div class="product-wrap"><img src="URL" class="product-img"></div>
+**PRODUCT treatment** (isolated shots):
+<div class="product-wrap"><img src="URL" class="product-img"></div>
 
-**Use LIFESTYLE treatment** (lifestyle-img + overlay) when:
-- Image shows product in context/environment
-- People wearing/using the product
-- Full scene photography
-- Hero/banner images
-→ <div class="frame lifestyle"><img src="URL" class="lifestyle-img"><div class="lifestyle-overlay"></div><div class="text-area">...</div></div>
+**LIFESTYLE treatment** (contextual/environmental):
+<div class="frame lifestyle active"><img src="URL" class="lifestyle-img"><div class="lifestyle-overlay"></div><div class="text-area">...</div></div>
 
-CRITICAL RULES:
-1. Analyze each image URL - choose treatment based on image type
-2. Mix both treatments for variety (lifestyle for impact, product for detail)
-3. Text ALWAYS in text-area div at bottom
-4. Lifestyle frames: add class="lifestyle" to .frame and include overlay for text readability
-5. Product frames: use product-wrap with gradient fade
+FRAME STRUCTURE:
+1. HERO: Impactful opening - lifestyle OR dramatic product reveal
+2. FEATURE: Product detail + benefit (use accent-line)
+3. VALUE: Social proof or key differentiator
+4. CTA: Strong call-to-action with product
 
-FRAME SUGGESTIONS:
-1. HERO: Lifestyle full-screen OR big product
-2. BENEFIT: Product shot + feature text
-3. DETAIL: Lifestyle showing product in use
-4. SOCIAL: Product + testimonial
-5. CTA: Product or lifestyle + "Shop Now"
+Add at end: <script>const timing = [3500, 3500, 3500, 3500, 3500];</script>
 
-Add at end: <script>const timing = [3000, 3500, 3500, 3500, 3500, 3000];</script>
-
-Return ONLY the complete HTML. No explanations."""
+Return ONLY complete HTML. No explanations."""
 
     # Build image list
     images_text = "\n".join([f"{i+1}. {img}" for i, img in enumerate(product_images)]) if product_images else "No images found - use placeholder styling"
