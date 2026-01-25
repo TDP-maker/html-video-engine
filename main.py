@@ -7,6 +7,9 @@ import imageio_ffmpeg
 import httpx
 import base64
 import io
+from typing import Optional, List, Dict, Any, Callable
+from dataclasses import dataclass, field
+from enum import Enum
 from fastapi import FastAPI, BackgroundTasks, HTTPException, Header, Depends
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.security import APIKeyHeader
@@ -62,9 +65,687 @@ async def verify_api_key(api_key: str = Depends(api_key_header)):
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
     return True
 
-# --- TEMPLATE SNIPPETS ---
-# Reusable HTML components extracted from successful video templates
-# Use these for consistent, proven layouts
+# --- TEMPLATE COMPONENT SYSTEM ---
+# A robust system for building video templates from reusable components
+
+
+class ComponentCategory(str, Enum):
+    """Categories for organizing components"""
+    FRAME = "frame"           # Full frame layouts
+    ELEMENT = "element"       # UI elements (badges, buttons)
+    TEXT = "text"             # Text/headline variations
+    OVERLAY = "overlay"       # Visual overlays
+    CONTAINER = "container"   # Structural containers
+
+
+@dataclass
+class ComponentProp:
+    """Definition of a component property"""
+    name: str
+    description: str
+    required: bool = False
+    default: Any = None
+    prop_type: str = "string"  # string, url, number, boolean, html
+
+
+@dataclass
+class Component:
+    """A reusable template component with metadata and variants"""
+    name: str
+    description: str
+    template: str
+    category: ComponentCategory
+    props: List[ComponentProp] = field(default_factory=list)
+    variants: Dict[str, str] = field(default_factory=dict)
+    slots: List[str] = field(default_factory=list)  # Named slots for nested components
+    tags: List[str] = field(default_factory=list)   # For filtering/searching
+
+    def render(self, variant: str = None, **kwargs) -> str:
+        """Render the component with provided props"""
+        # Use variant template if specified
+        tmpl = self.variants.get(variant, self.template) if variant else self.template
+
+        # Apply defaults for missing props
+        for prop in self.props:
+            if prop.name not in kwargs and prop.default is not None:
+                kwargs[prop.name] = prop.default
+
+        # Validate required props
+        missing = [p.name for p in self.props if p.required and p.name not in kwargs]
+        if missing:
+            raise ValueError(f"Component '{self.name}' missing required props: {missing}")
+
+        # Replace placeholders
+        result = tmpl
+        for key, value in kwargs.items():
+            result = result.replace(f"{{{key}}}", str(value) if value is not None else "")
+
+        return result
+
+    def get_prop_names(self) -> List[str]:
+        """Get list of all prop names"""
+        return [p.name for p in self.props]
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for API responses"""
+        return {
+            "name": self.name,
+            "description": self.description,
+            "category": self.category.value,
+            "props": [
+                {
+                    "name": p.name,
+                    "description": p.description,
+                    "required": p.required,
+                    "default": p.default,
+                    "type": p.prop_type
+                }
+                for p in self.props
+            ],
+            "variants": list(self.variants.keys()),
+            "slots": self.slots,
+            "tags": self.tags,
+            "template": self.template
+        }
+
+
+class ComponentRegistry:
+    """Registry for managing and accessing components"""
+
+    def __init__(self):
+        self._components: Dict[str, Component] = {}
+
+    def register(self, component: Component) -> None:
+        """Register a component"""
+        self._components[component.name] = component
+
+    def get(self, name: str) -> Component:
+        """Get a component by name"""
+        if name not in self._components:
+            raise ValueError(f"Component '{name}' not found. Available: {list(self._components.keys())}")
+        return self._components[name]
+
+    def list(self, category: ComponentCategory = None, tags: List[str] = None) -> List[Component]:
+        """List components, optionally filtered by category or tags"""
+        components = list(self._components.values())
+
+        if category:
+            components = [c for c in components if c.category == category]
+
+        if tags:
+            components = [c for c in components if any(t in c.tags for t in tags)]
+
+        return components
+
+    def render(self, name: str, variant: str = None, **kwargs) -> str:
+        """Render a component by name"""
+        return self.get(name).render(variant=variant, **kwargs)
+
+    def list_names(self) -> List[str]:
+        """Get all component names"""
+        return list(self._components.keys())
+
+    def to_dict(self) -> dict:
+        """Convert registry to dictionary for API"""
+        return {
+            name: comp.to_dict()
+            for name, comp in self._components.items()
+        }
+
+
+# Global component registry
+component_registry = ComponentRegistry()
+
+
+# --- REGISTER FRAME COMPONENTS ---
+
+component_registry.register(Component(
+    name="product_hero",
+    description="Hero product frame with floating animation and brand glow",
+    category=ComponentCategory.FRAME,
+    tags=["hero", "product", "animated"],
+    props=[
+        ComponentProp("image_url", "Product image URL", required=True, prop_type="url"),
+        ComponentProp("product_name", "Product name for alt text", default="Product"),
+        ComponentProp("headline", "Main headline text", required=True),
+        ComponentProp("subheadline", "Secondary text", default=""),
+    ],
+    slots=["badges"],  # Can insert badges component
+    template='''<div class="frame active">
+  <div class="bg-glow"></div>
+  <div class="product-wrap">
+    <img src="{image_url}" class="product-img" alt="{product_name}">
+  </div>
+  <div class="text-area">
+    <h1 class="text-clamp-2">{headline}</h1>
+    <p class="text-clamp-3">{subheadline}</p>
+    <div class="accent-line"></div>
+  </div>
+  {badges}
+</div>''',
+    variants={
+        "minimal": '''<div class="frame active">
+  <div class="bg-glow"></div>
+  <div class="product-wrap">
+    <img src="{image_url}" class="product-img" alt="{product_name}">
+  </div>
+  <div class="text-area">
+    <h1 class="text-clamp-2">{headline}</h1>
+  </div>
+</div>''',
+        "with_price": '''<div class="frame active">
+  <div class="bg-glow"></div>
+  <div class="product-wrap">
+    <img src="{image_url}" class="product-img" alt="{product_name}">
+  </div>
+  <div class="text-area">
+    <h1 class="text-clamp-2">{headline}</h1>
+    <p class="text-clamp-3">{subheadline}</p>
+    <div class="accent-line"></div>
+  </div>
+  <div class="price-badge"><span class="price-current">{price}</span></div>
+</div>'''
+    }
+))
+
+component_registry.register(Component(
+    name="lifestyle",
+    description="Full-bleed lifestyle image with gradient overlay",
+    category=ComponentCategory.FRAME,
+    tags=["lifestyle", "fullbleed", "fashion"],
+    props=[
+        ComponentProp("image_url", "Lifestyle image URL", required=True, prop_type="url"),
+        ComponentProp("product_name", "Product name for alt text", default="Product"),
+        ComponentProp("headline", "Main headline text", required=True),
+        ComponentProp("subheadline", "Secondary text", default=""),
+    ],
+    template='''<div class="frame lifestyle active">
+  <img src="{image_url}" class="lifestyle-img" alt="{product_name}">
+  <div class="lifestyle-overlay"></div>
+  <div class="text-area">
+    <h1 class="text-clamp-2">{headline}</h1>
+    <p class="text-clamp-3">{subheadline}</p>
+  </div>
+</div>''',
+    variants={
+        "dark_overlay": '''<div class="frame lifestyle active">
+  <img src="{image_url}" class="lifestyle-img" alt="{product_name}">
+  <div class="lifestyle-overlay" style="background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.5) 50%, transparent 100%);"></div>
+  <div class="text-area">
+    <h1 class="text-clamp-2">{headline}</h1>
+    <p class="text-clamp-3">{subheadline}</p>
+  </div>
+</div>''',
+        "no_text": '''<div class="frame lifestyle active">
+  <img src="{image_url}" class="lifestyle-img" alt="{product_name}">
+  <div class="lifestyle-overlay"></div>
+</div>'''
+    }
+))
+
+component_registry.register(Component(
+    name="ai_background",
+    description="Product with AI-generated cinematic background",
+    category=ComponentCategory.FRAME,
+    tags=["ai", "cinematic", "premium"],
+    props=[
+        ComponentProp("image_url", "Product image URL", required=True, prop_type="url"),
+        ComponentProp("ai_bg_url", "AI background URL", required=True, prop_type="url"),
+        ComponentProp("product_name", "Product name for alt text", default="Product"),
+        ComponentProp("headline", "Main headline text", required=True),
+        ComponentProp("subheadline", "Secondary text", default=""),
+    ],
+    template='''<div class="frame ai-background active">
+  <img src="{ai_bg_url}" class="ai-bg" alt="background">
+  <div class="ai-bg-overlay"></div>
+  <div class="product-wrap">
+    <img src="{image_url}" class="product-img" alt="{product_name}">
+  </div>
+  <div class="text-area">
+    <h1 class="text-clamp-2">{headline}</h1>
+    <p class="text-clamp-3">{subheadline}</p>
+  </div>
+</div>'''
+))
+
+component_registry.register(Component(
+    name="cta_frame",
+    description="Call-to-action frame with animated button",
+    category=ComponentCategory.FRAME,
+    tags=["cta", "final", "action"],
+    props=[
+        ComponentProp("image_url", "Product image URL", required=True, prop_type="url"),
+        ComponentProp("product_name", "Product name for alt text", default="Product"),
+        ComponentProp("headline", "Main headline text", required=True),
+        ComponentProp("cta_text", "Button text", default="Shop Now"),
+    ],
+    template='''<div class="frame active">
+  <div class="bg-glow"></div>
+  <div class="product-wrap">
+    <img src="{image_url}" class="product-img" alt="{product_name}">
+  </div>
+  <div class="text-area">
+    <h1 class="text-clamp-2">{headline}</h1>
+    <button class="cta-button">{cta_text}</button>
+  </div>
+</div>''',
+    variants={
+        "urgent": '''<div class="frame active">
+  <div class="bg-glow"></div>
+  <div class="product-wrap">
+    <img src="{image_url}" class="product-img" alt="{product_name}">
+  </div>
+  <div class="text-area">
+    <h1 class="text-clamp-2">{headline}</h1>
+    <p class="text-accent" style="font-size: 24px; margin-bottom: 20px;">Limited Time Only</p>
+    <button class="cta-button">{cta_text}</button>
+  </div>
+</div>''',
+        "with_trust": '''<div class="frame active">
+  <div class="bg-glow"></div>
+  <div class="product-wrap">
+    <img src="{image_url}" class="product-img" alt="{product_name}">
+  </div>
+  <div class="text-area">
+    <h1 class="text-clamp-2">{headline}</h1>
+    <button class="cta-button">{cta_text}</button>
+  </div>
+  <div class="trust-badges">
+    <div class="trust-badge"><span class="icon">🚚</span><span class="text">Free Shipping</span></div>
+    <div class="trust-badge"><span class="icon">✓</span><span class="text">Authentic</span></div>
+  </div>
+</div>'''
+    }
+))
+
+component_registry.register(Component(
+    name="feature_frame",
+    description="Feature highlight with accent styling",
+    category=ComponentCategory.FRAME,
+    tags=["feature", "benefit", "detail"],
+    props=[
+        ComponentProp("image_url", "Product image URL", required=True, prop_type="url"),
+        ComponentProp("product_name", "Product name for alt text", default="Product"),
+        ComponentProp("headline", "Main headline text", required=True),
+        ComponentProp("feature_text", "Feature description", default=""),
+    ],
+    template='''<div class="frame active">
+  <div class="bg-glow"></div>
+  <div class="product-wrap">
+    <img src="{image_url}" class="product-img" alt="{product_name}">
+  </div>
+  <div class="text-area">
+    <h1 class="text-gradient text-clamp-2">{headline}</h1>
+    <p class="subtitle-brand text-clamp-3">{feature_text}</p>
+    <div class="accent-line"></div>
+  </div>
+</div>'''
+))
+
+component_registry.register(Component(
+    name="split_frame",
+    description="Split layout with image on one side, text on other",
+    category=ComponentCategory.FRAME,
+    tags=["split", "editorial", "modern"],
+    props=[
+        ComponentProp("image_url", "Product image URL", required=True, prop_type="url"),
+        ComponentProp("product_name", "Product name for alt text", default="Product"),
+        ComponentProp("headline", "Main headline text", required=True),
+        ComponentProp("body_text", "Body copy", default=""),
+    ],
+    template='''<div class="frame active" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0;">
+  <div style="display: flex; align-items: center; justify-content: center; padding: 60px;">
+    <img src="{image_url}" style="max-width: 100%; max-height: 80%; object-fit: contain;" alt="{product_name}">
+  </div>
+  <div style="display: flex; flex-direction: column; justify-content: center; padding: 60px; background: rgba(0,0,0,0.3);">
+    <h1 class="text-clamp-3" style="font-size: 48px; margin-bottom: 24px;">{headline}</h1>
+    <p class="text-clamp-4" style="font-size: 24px; opacity: 0.8;">{body_text}</p>
+  </div>
+</div>'''
+))
+
+
+# --- REGISTER ELEMENT COMPONENTS ---
+
+component_registry.register(Component(
+    name="price_badge",
+    description="Price display with optional discount",
+    category=ComponentCategory.ELEMENT,
+    tags=["price", "badge", "discount"],
+    props=[
+        ComponentProp("current_price", "Current price", required=True),
+        ComponentProp("original_price", "Original price (for sale)", default=""),
+        ComponentProp("discount_percent", "Discount percentage", default=""),
+    ],
+    template='''<div class="price-badge">
+  <span class="price-original">{original_price}</span>
+  <span class="price-current">{current_price}</span>
+  <span class="price-discount">{discount_percent}% OFF</span>
+</div>''',
+    variants={
+        "simple": '''<div class="price-badge">
+  <span class="price-current">{current_price}</span>
+</div>''',
+        "large": '''<div class="price-badge" style="transform: scale(1.3);">
+  <span class="price-current">{current_price}</span>
+</div>'''
+    }
+))
+
+component_registry.register(Component(
+    name="trust_badges",
+    description="Trust indicators for credibility",
+    category=ComponentCategory.ELEMENT,
+    tags=["trust", "badges", "credibility"],
+    props=[
+        ComponentProp("badge1_icon", "First badge icon", default="🚚"),
+        ComponentProp("badge1_text", "First badge text", default="Free Shipping"),
+        ComponentProp("badge2_icon", "Second badge icon", default="✓"),
+        ComponentProp("badge2_text", "Second badge text", default="100% Authentic"),
+        ComponentProp("badge3_icon", "Third badge icon", default="⚡"),
+        ComponentProp("badge3_text", "Third badge text", default="Fast Delivery"),
+    ],
+    template='''<div class="trust-badges">
+  <div class="trust-badge"><span class="icon">{badge1_icon}</span><span class="text">{badge1_text}</span></div>
+  <div class="trust-badge"><span class="icon">{badge2_icon}</span><span class="text">{badge2_text}</span></div>
+  <div class="trust-badge"><span class="icon">{badge3_icon}</span><span class="text">{badge3_text}</span></div>
+</div>''',
+    variants={
+        "two_badges": '''<div class="trust-badges">
+  <div class="trust-badge"><span class="icon">{badge1_icon}</span><span class="text">{badge1_text}</span></div>
+  <div class="trust-badge"><span class="icon">{badge2_icon}</span><span class="text">{badge2_text}</span></div>
+</div>''',
+        "compact": '''<div class="trust-badges" style="font-size: 14px; gap: 10px;">
+  <div class="trust-badge"><span class="icon">{badge1_icon}</span><span class="text">{badge1_text}</span></div>
+  <div class="trust-badge"><span class="icon">{badge2_icon}</span><span class="text">{badge2_text}</span></div>
+</div>'''
+    }
+))
+
+component_registry.register(Component(
+    name="cta_button",
+    description="Animated call-to-action button",
+    category=ComponentCategory.ELEMENT,
+    tags=["button", "cta", "action"],
+    props=[
+        ComponentProp("text", "Button text", default="Shop Now"),
+        ComponentProp("style", "Additional inline styles", default=""),
+    ],
+    template='''<button class="cta-button" style="{style}">{text}</button>''',
+    variants={
+        "outline": '''<button class="cta-button" style="background: transparent; border: 2px solid currentColor; {style}">{text}</button>''',
+        "large": '''<button class="cta-button" style="padding: 28px 70px; font-size: 32px; {style}">{text}</button>''',
+        "pill": '''<button class="cta-button" style="border-radius: 100px; {style}">{text}</button>'''
+    }
+))
+
+component_registry.register(Component(
+    name="progress_bar",
+    description="Video progress indicator",
+    category=ComponentCategory.ELEMENT,
+    tags=["progress", "navigation", "indicator"],
+    props=[
+        ComponentProp("total_segments", "Number of segments", default="4", prop_type="number"),
+        ComponentProp("active_segment", "Currently active segment (1-based)", default="1", prop_type="number"),
+    ],
+    template='''<div class="progress-bar">
+  <div class="progress-segment active"></div>
+  <div class="progress-segment"></div>
+  <div class="progress-segment"></div>
+  <div class="progress-segment"></div>
+</div>'''
+))
+
+
+# --- REGISTER TEXT COMPONENTS ---
+
+component_registry.register(Component(
+    name="headline",
+    description="Styled headline with various treatments",
+    category=ComponentCategory.TEXT,
+    tags=["headline", "text", "title"],
+    props=[
+        ComponentProp("text", "Headline text", required=True),
+        ComponentProp("size", "Size class (headline-sm, headline-lg)", default=""),
+    ],
+    template='''<h1 class="text-clamp-2 {size}">{text}</h1>''',
+    variants={
+        "gradient": '''<h1 class="text-gradient text-clamp-2 {size}">{text}</h1>''',
+        "gradient_bold": '''<h1 class="text-gradient-bold text-clamp-2 {size}">{text}</h1>''',
+        "brand": '''<h1 class="text-brand text-clamp-2 {size}">{text}</h1>''',
+        "accent": '''<h1 class="text-accent text-clamp-2 {size}">{text}</h1>'''
+    }
+))
+
+component_registry.register(Component(
+    name="headline_highlight",
+    description="Headline with a highlighted keyword",
+    category=ComponentCategory.TEXT,
+    tags=["headline", "highlight", "emphasis"],
+    props=[
+        ComponentProp("prefix", "Text before highlight", default=""),
+        ComponentProp("keyword", "Highlighted word", required=True),
+        ComponentProp("suffix", "Text after highlight", default=""),
+    ],
+    template='''<h1 class="text-clamp-2">{prefix} <span class="highlight">{keyword}</span> {suffix}</h1>'''
+))
+
+component_registry.register(Component(
+    name="subtitle",
+    description="Secondary text/subtitle",
+    category=ComponentCategory.TEXT,
+    tags=["subtitle", "text", "secondary"],
+    props=[
+        ComponentProp("text", "Subtitle text", required=True),
+    ],
+    template='''<p class="text-clamp-3">{text}</p>''',
+    variants={
+        "brand": '''<p class="subtitle-brand text-clamp-3">{text}</p>''',
+        "small": '''<p class="text-clamp-3" style="font-size: 24px;">{text}</p>''',
+        "large": '''<p class="text-clamp-3" style="font-size: 40px;">{text}</p>'''
+    }
+))
+
+
+# --- REGISTER OVERLAY COMPONENTS ---
+
+component_registry.register(Component(
+    name="cinematic_overlays",
+    description="Full cinematic overlay package (vignette, grain, color grade)",
+    category=ComponentCategory.OVERLAY,
+    tags=["overlay", "cinematic", "premium"],
+    props=[],
+    template='''<div class="vignette"></div>
+<div class="film-grain"></div>
+<div class="color-grade"></div>'''
+))
+
+component_registry.register(Component(
+    name="vignette",
+    description="Edge darkening vignette effect",
+    category=ComponentCategory.OVERLAY,
+    tags=["overlay", "vignette"],
+    props=[
+        ComponentProp("intensity", "Vignette darkness (0-1)", default="0.25", prop_type="number"),
+    ],
+    template='''<div class="vignette" style="background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,{intensity}) 100%);"></div>'''
+))
+
+component_registry.register(Component(
+    name="gradient_overlay",
+    description="Customizable gradient overlay",
+    category=ComponentCategory.OVERLAY,
+    tags=["overlay", "gradient"],
+    props=[
+        ComponentProp("direction", "Gradient direction (to top, to bottom, etc.)", default="to top"),
+        ComponentProp("color", "Overlay color", default="0,0,0"),
+        ComponentProp("opacity_start", "Start opacity", default="0.8"),
+        ComponentProp("opacity_end", "End opacity", default="0"),
+    ],
+    template='''<div style="position: absolute; bottom: 0; left: 0; width: 100%; height: 50%; background: linear-gradient({direction}, rgba({color},{opacity_start}) 0%, rgba({color},{opacity_end}) 100%); z-index: 1; pointer-events: none;"></div>'''
+))
+
+
+# --- REGISTER CONTAINER COMPONENTS ---
+
+component_registry.register(Component(
+    name="reel_container",
+    description="Base container for Instagram Reel videos",
+    category=ComponentCategory.CONTAINER,
+    tags=["container", "reel", "base"],
+    props=[
+        ComponentProp("frames", "HTML content for frames", required=True, prop_type="html"),
+        ComponentProp("include_overlays", "Include cinematic overlays", default="true", prop_type="boolean"),
+    ],
+    template='''<div class="reel-container">
+  <div class="bg-glow"></div>
+  {frames}
+  <div class="vignette"></div>
+  <div class="film-grain"></div>
+  <div class="color-grade"></div>
+</div>''',
+    variants={
+        "minimal": '''<div class="reel-container">
+  {frames}
+</div>''',
+        "no_glow": '''<div class="reel-container">
+  {frames}
+  <div class="vignette"></div>
+  <div class="film-grain"></div>
+  <div class="color-grade"></div>
+</div>'''
+    }
+))
+
+component_registry.register(Component(
+    name="text_area",
+    description="Safe text area container",
+    category=ComponentCategory.CONTAINER,
+    tags=["container", "text", "safe-zone"],
+    props=[
+        ComponentProp("content", "Text content HTML", required=True, prop_type="html"),
+        ComponentProp("position", "Position (bottom, center, top)", default="bottom"),
+    ],
+    template='''<div class="text-area">
+  {content}
+</div>''',
+    variants={
+        "center": '''<div class="text-area" style="bottom: auto; top: 50%; transform: translateY(-50%);">
+  {content}
+</div>''',
+        "top": '''<div class="text-area" style="bottom: auto; top: 280px;">
+  {content}
+</div>'''
+    }
+))
+
+
+# --- VIDEO PRESETS ---
+# Pre-configured video structures for common use cases
+
+VIDEO_PRESETS = {
+    "product_showcase": {
+        "name": "Product Showcase",
+        "description": "4-frame product video: Hero → Feature → Benefit → CTA",
+        "frames": ["product_hero", "feature_frame", "feature_frame", "cta_frame"],
+        "timing": [5500, 4000, 4000, 4500],
+        "best_for": ["products", "e-commerce", "launches"]
+    },
+    "lifestyle_story": {
+        "name": "Lifestyle Story",
+        "description": "4-frame lifestyle video: Lifestyle → Product → Feature → CTA",
+        "frames": ["lifestyle", "product_hero", "feature_frame", "cta_frame"],
+        "timing": [5000, 4500, 4000, 4500],
+        "best_for": ["fashion", "beauty", "home"]
+    },
+    "quick_promo": {
+        "name": "Quick Promo",
+        "description": "3-frame quick promo: Hero → Feature → CTA",
+        "frames": ["product_hero", "feature_frame", "cta_frame"],
+        "timing": [4000, 3500, 3500],
+        "best_for": ["sales", "promotions", "flash deals"]
+    },
+    "premium_cinematic": {
+        "name": "Premium Cinematic",
+        "description": "4-frame cinematic video with AI backgrounds",
+        "frames": ["ai_background", "feature_frame", "lifestyle", "cta_frame"],
+        "timing": [6000, 4500, 4500, 5000],
+        "best_for": ["luxury", "premium", "high-end"]
+    },
+    "social_teaser": {
+        "name": "Social Teaser",
+        "description": "2-frame quick teaser: Impact → CTA",
+        "frames": ["product_hero", "cta_frame"],
+        "timing": [4000, 3000],
+        "best_for": ["teasers", "stories", "quick ads"]
+    }
+}
+
+
+class VideoBuilder:
+    """Fluent builder for assembling videos from components"""
+
+    def __init__(self):
+        self.frames: List[str] = []
+        self.timing: List[int] = []
+        self.global_props: Dict[str, Any] = {}
+
+    def set_props(self, **props) -> 'VideoBuilder':
+        """Set global props that apply to all frames"""
+        self.global_props.update(props)
+        return self
+
+    def add_frame(self, component_name: str, variant: str = None,
+                  duration_ms: int = 4000, **props) -> 'VideoBuilder':
+        """Add a frame using a component"""
+        merged_props = {**self.global_props, **props}
+        frame_html = component_registry.render(component_name, variant=variant, **merged_props)
+        self.frames.append(frame_html)
+        self.timing.append(duration_ms)
+        return self
+
+    def from_preset(self, preset_name: str, images: List[str],
+                    headlines: List[str], **props) -> 'VideoBuilder':
+        """Build video from a preset template"""
+        if preset_name not in VIDEO_PRESETS:
+            raise ValueError(f"Unknown preset: {preset_name}. Available: {list(VIDEO_PRESETS.keys())}")
+
+        preset = VIDEO_PRESETS[preset_name]
+        self.global_props.update(props)
+
+        for i, (frame_name, duration) in enumerate(zip(preset["frames"], preset["timing"])):
+            frame_props = {
+                "image_url": images[i % len(images)] if images else "",
+                "headline": headlines[i % len(headlines)] if headlines else "",
+                **self.global_props
+            }
+            self.add_frame(frame_name, duration_ms=duration, **frame_props)
+
+        return self
+
+    def build(self) -> dict:
+        """Build the final video structure"""
+        frames_html = "\n".join(self.frames)
+        container = component_registry.render("reel_container", frames=frames_html)
+
+        return {
+            "html": container,
+            "timing": self.timing,
+            "frame_count": len(self.frames)
+        }
+
+    def build_html(self) -> str:
+        """Build and return just the HTML"""
+        return self.build()["html"]
+
+
+def get_video_builder() -> VideoBuilder:
+    """Get a new VideoBuilder instance"""
+    return VideoBuilder()
+
+
+# --- LEGACY SUPPORT ---
+# Keep TEMPLATE_SNIPPETS for backwards compatibility
 
 TEMPLATE_SNIPPETS = {
     # Hero product frame with floating animation and brand glow
@@ -3256,18 +3937,243 @@ async def download_latest():
     return FileResponse(f"{videos_folder}/{latest}", media_type="video/mp4", filename="creative.mp4")
 
 
+# --- COMPONENT SYSTEM API ---
+
+@app.get("/components")
+async def list_components(category: str = None, tag: str = None):
+    """List all available components with full metadata
+
+    Query params:
+        category: Filter by category (frame, element, text, overlay, container)
+        tag: Filter by tag (e.g., 'hero', 'cta', 'premium')
+    """
+    cat = ComponentCategory(category) if category else None
+    tags = [tag] if tag else None
+    components = component_registry.list(category=cat, tags=tags)
+
+    return {
+        "count": len(components),
+        "components": [c.to_dict() for c in components],
+        "categories": [c.value for c in ComponentCategory],
+        "all_tags": list(set(t for c in component_registry.list() for t in c.tags))
+    }
+
+
+@app.get("/components/{name}")
+async def get_component(name: str):
+    """Get full details of a specific component"""
+    try:
+        component = component_registry.get(name)
+        return component.to_dict()
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+class ComponentRenderRequest(BaseModel):
+    """Request to render a component"""
+    variant: Optional[str] = None
+    props: dict = {}
+
+
+@app.post("/components/{name}/render")
+async def render_component(name: str, request: ComponentRenderRequest):
+    """Render a component with props and optional variant
+
+    Example:
+        POST /components/product_hero/render
+        {
+            "variant": "with_price",
+            "props": {
+                "image_url": "https://example.com/shoe.png",
+                "headline": "Step Into Style",
+                "price": "$129"
+            }
+        }
+    """
+    try:
+        html = component_registry.render(name, variant=request.variant, **request.props)
+        component = component_registry.get(name)
+        return {
+            "name": name,
+            "variant": request.variant,
+            "html": html,
+            "props_used": list(request.props.keys()),
+            "available_variants": list(component.variants.keys())
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# --- VIDEO PRESETS API ---
+
+@app.get("/presets")
+async def list_presets():
+    """List all available video presets"""
+    return {
+        "presets": VIDEO_PRESETS,
+        "usage": "Use POST /presets/{name}/build to generate video HTML from a preset"
+    }
+
+
+@app.get("/presets/{name}")
+async def get_preset(name: str):
+    """Get details of a specific preset"""
+    if name not in VIDEO_PRESETS:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Preset '{name}' not found. Available: {list(VIDEO_PRESETS.keys())}"
+        )
+    preset = VIDEO_PRESETS[name]
+    return {
+        **preset,
+        "frame_components": [component_registry.get(f).to_dict() for f in preset["frames"]]
+    }
+
+
+class PresetBuildRequest(BaseModel):
+    """Request to build a video from a preset"""
+    images: List[str]
+    headlines: List[str]
+    subheadline: str = ""
+    product_name: str = "Product"
+    cta_text: str = "Shop Now"
+    extra_props: dict = {}
+
+
+@app.post("/presets/{name}/build")
+async def build_from_preset(name: str, request: PresetBuildRequest):
+    """Build a video from a preset template
+
+    Example:
+        POST /presets/product_showcase/build
+        {
+            "images": ["https://example.com/img1.png", "https://example.com/img2.png"],
+            "headlines": ["Step Into Style", "Premium Comfort", "Made to Last", "Shop Now"],
+            "subheadline": "Elevate your look",
+            "product_name": "Nike Air Max",
+            "cta_text": "Get Yours"
+        }
+    """
+    try:
+        builder = get_video_builder()
+        builder.set_props(
+            subheadline=request.subheadline,
+            product_name=request.product_name,
+            cta_text=request.cta_text,
+            feature_text=request.subheadline,
+            **request.extra_props
+        )
+        builder.from_preset(name, request.images, request.headlines)
+        result = builder.build()
+
+        return {
+            "preset": name,
+            "html": result["html"],
+            "timing": result["timing"],
+            "frame_count": result["frame_count"],
+            "timing_script": f"<script>window.timing = {result['timing']};</script>"
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# --- VIDEO BUILDER API ---
+
+class VideoFrame(BaseModel):
+    """A single frame in a custom video"""
+    component: str
+    variant: Optional[str] = None
+    duration_ms: int = 4000
+    props: dict = {}
+
+
+class VideoBuildRequest(BaseModel):
+    """Request to build a custom video"""
+    frames: List[VideoFrame]
+    global_props: dict = {}
+
+
+@app.post("/video/build")
+async def build_custom_video(request: VideoBuildRequest):
+    """Build a custom video by specifying frames and components
+
+    Example:
+        POST /video/build
+        {
+            "global_props": {
+                "product_name": "Nike Air Max",
+                "subheadline": "Premium comfort"
+            },
+            "frames": [
+                {
+                    "component": "product_hero",
+                    "duration_ms": 5000,
+                    "props": {
+                        "image_url": "https://example.com/img1.png",
+                        "headline": "Step Into Style"
+                    }
+                },
+                {
+                    "component": "feature_frame",
+                    "duration_ms": 4000,
+                    "props": {
+                        "image_url": "https://example.com/img2.png",
+                        "headline": "Comfort First",
+                        "feature_text": "All-day cushioning"
+                    }
+                },
+                {
+                    "component": "cta_frame",
+                    "variant": "with_trust",
+                    "duration_ms": 4500,
+                    "props": {
+                        "image_url": "https://example.com/img1.png",
+                        "headline": "Get Yours Today",
+                        "cta_text": "Shop Now"
+                    }
+                }
+            ]
+        }
+    """
+    try:
+        builder = get_video_builder()
+        builder.set_props(**request.global_props)
+
+        for frame in request.frames:
+            builder.add_frame(
+                frame.component,
+                variant=frame.variant,
+                duration_ms=frame.duration_ms,
+                **frame.props
+            )
+
+        result = builder.build()
+
+        return {
+            "html": result["html"],
+            "timing": result["timing"],
+            "frame_count": result["frame_count"],
+            "timing_script": f"<script>window.timing = {result['timing']};</script>"
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# --- LEGACY TEMPLATE API (backwards compatible) ---
+
 @app.get("/templates")
 async def get_templates():
-    """List all available template snippets with descriptions"""
+    """List all available template snippets (legacy API)"""
     return {
         "snippets": list_template_snippets(),
-        "usage": "Use GET /templates/{name} to get a specific template, or POST /templates/{name} with JSON body to get a filled template"
+        "usage": "Use GET /templates/{name} to get a specific template, or POST /templates/{name} with JSON body to get a filled template",
+        "note": "Consider using the new /components API for more features"
     }
 
 
 @app.get("/templates/{name}")
 async def get_template(name: str):
-    """Get a specific template snippet by name"""
+    """Get a specific template snippet by name (legacy API)"""
     if name not in TEMPLATE_SNIPPETS:
         raise HTTPException(
             status_code=404,
@@ -3287,7 +4193,7 @@ class TemplateRequest(BaseModel):
 
 @app.post("/templates/{name}")
 async def fill_template(name: str, request: TemplateRequest):
-    """Fill a template snippet with provided variables
+    """Fill a template snippet with provided variables (legacy API)
 
     Example:
         POST /templates/product_hero
