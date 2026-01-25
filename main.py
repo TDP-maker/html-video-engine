@@ -480,23 +480,40 @@ async def extract_images_with_playwright(url: str) -> tuple[list, str, str, dict
             extracted_copy = text_content
             print(f"📝 Extracted copy: {extracted_copy.get('product_name', 'Unknown')[:50]}...")
 
-            # Extract images from rendered DOM
+            # Extract images from rendered DOM - prioritize product images over branding
             images = await page.evaluate("""() => {
-                const images = [];
+                const productImages = [];
+                const otherImages = [];
 
-                // Get og:image first (usually best quality)
-                const ogImage = document.querySelector('meta[property="og:image"]');
-                if (ogImage) images.push(ogImage.content);
+                // Product-specific selectors (highest priority)
+                const productSelectors = [
+                    '.product-image img', '.product-gallery img', '.product-photo img',
+                    '[data-testid*="product"] img', '[class*="product-image"] img',
+                    '.gallery img', '.main-image img', '.featured-image img',
+                    '[itemprop="image"]', '.woocommerce-product-gallery img',
+                    '.product-single__photo img', '.product__photo img'
+                ];
 
-                // Get all img elements
+                for (const selector of productSelectors) {
+                    document.querySelectorAll(selector).forEach(img => {
+                        let src = img.src || img.dataset.src || img.getAttribute('data-lazy-src');
+                        if (src && src.startsWith('http') && !productImages.includes(src)) {
+                            productImages.push(src);
+                        }
+                    });
+                }
+
+                // Get all other img elements (lower priority)
                 document.querySelectorAll('img').forEach(img => {
                     let src = img.src || img.dataset.src || img.getAttribute('data-lazy-src');
-                    if (src && src.startsWith('http')) {
+                    if (src && src.startsWith('http') && !productImages.includes(src)) {
                         // Filter out tiny images, icons, tracking pixels
                         const width = img.naturalWidth || img.width || 0;
                         const height = img.naturalHeight || img.height || 0;
-                        if (width >= 200 || height >= 200 || src.includes('product') || src.includes('hero')) {
-                            images.push(src);
+                        // Skip images that look like logos (wider than tall, small height)
+                        const isLikelyLogo = width > height * 2 && height < 150;
+                        if (!isLikelyLogo && (width >= 200 || height >= 200 || src.includes('product'))) {
+                            otherImages.push(src);
                         }
                     }
                 });
@@ -505,17 +522,33 @@ async def extract_images_with_playwright(url: str) -> tuple[list, str, str, dict
                 document.querySelectorAll('[style*="background"]').forEach(el => {
                     const style = el.getAttribute('style');
                     const match = style.match(/url\\(['"]?(https?[^'"\\)]+)['"]?\\)/);
-                    if (match) images.push(match[1]);
+                    if (match && !productImages.includes(match[1])) {
+                        otherImages.push(match[1]);
+                    }
                 });
 
-                return [...new Set(images)]; // Remove duplicates
+                // og:image as fallback (often store logo, put last)
+                const ogImage = document.querySelector('meta[property="og:image"]');
+                if (ogImage && ogImage.content && !productImages.includes(ogImage.content)) {
+                    otherImages.push(ogImage.content);
+                }
+
+                // Combine: product images first, then others
+                return [...new Set([...productImages, ...otherImages])];
             }""")
 
             await browser.close()
 
-            # Filter images
+            # Filter images - skip branding, logos, and UI elements
+            skip_patterns = [
+                'icon', 'logo', 'sprite', '.svg', 'pixel', 'tracking', '1x1', 'spacer', 'blank',
+                'banner', 'header', 'footer', 'nav', 'brand', 'store-logo', 'site-logo',
+                'favicon', 'badge', 'social', 'payment', 'shipping', 'trust', 'seal',
+                'watermark', 'placeholder', 'loading', 'spinner', 'avatar', 'user-icon'
+            ]
             for img in images:
-                if any(skip in img.lower() for skip in ['icon', 'logo', 'sprite', '.svg', 'pixel', 'tracking', '1x1', 'spacer', 'blank']):
+                img_lower = img.lower()
+                if any(skip in img_lower for skip in skip_patterns):
                     continue
                 if img not in product_images:
                     product_images.append(img)
@@ -704,8 +737,15 @@ def detect_product_category(title: str, description: str = "") -> str:
     home_keywords = ['furniture', 'home', 'decor', 'chair', 'table', 'sofa', 'lamp',
                     'bed', 'pillow', 'rug', 'curtain', 'kitchen']
 
+    # Party/Celebration keywords
+    party_keywords = ['party', 'celebration', 'birthday', 'wedding', 'event', 'balloon',
+                     'decoration', 'حفلات', 'حفلة', 'عيد', 'زفاف', 'مناسبة', 'بالون',
+                     'festive', 'anniversary', 'baby shower', 'graduation', 'supplies']
+
     # Check categories (order matters - more specific first)
-    if any(kw in text for kw in footwear_keywords):
+    if any(kw in text for kw in party_keywords):
+        return "party"
+    elif any(kw in text for kw in footwear_keywords):
         return "footwear"
     elif any(kw in text for kw in fashion_keywords):
         return "fashion"
