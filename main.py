@@ -73,6 +73,10 @@ class VideoFeatures(BaseModel):
     font_family: str = "Inter"           # Font for headlines
     text_color: str = "#ffffff"          # Main text color
     accent_color: str = ""               # Accent color (empty = use extracted)
+    # Creative direction
+    video_style: str = "editorial"       # editorial, dynamic, product_focus, lifestyle
+    mood: str = "luxury"                 # luxury, playful, bold, minimal
+    pacing: str = "balanced"             # slow, balanced, fast
 
 class URLVideoRequest(BaseModel):
     """Generate video from URL + prompt"""
@@ -1065,7 +1069,69 @@ async def generate_html_from_url(url: str, prompt: str = "", features: VideoFeat
     print(f"🎨 {color_description}")
     print(f"🔤 Font: {font_family}, Text: {text_color}, Accent: {accent_color}")
 
+    # Creative direction settings
+    video_style = features.video_style if features.video_style else "editorial"
+    mood = features.mood if features.mood else "luxury"
+    pacing = features.pacing if features.pacing else "balanced"
+
+    print(f"🎬 Creative: Style={video_style}, Mood={mood}, Pacing={pacing}")
+
+    # Video style templates - proven composition structures
+    style_templates = {
+        "editorial": """EDITORIAL STYLE (Fashion Magazine Aesthetic):
+- Frame 1: Hero lifestyle shot - model/product fills frame, dramatic lighting
+- Frame 2: Detail or alternate angle - focus on craftsmanship/texture
+- Frame 3: Lifestyle context - product in use/worn
+- Frame 4: CTA frame - clean product shot with button
+COMPOSITION: Full-bleed images, minimal text, let visuals breathe. One strong headline per frame.""",
+
+        "dynamic": """DYNAMIC STYLE (High Energy):
+- Frame 1: Bold opening - product bursting onto screen
+- Frame 2: Quick feature highlight - zoom on key detail
+- Frame 3: Action/movement shot - energy and motion
+- Frame 4: Punchy CTA - urgent, compelling call to action
+COMPOSITION: Strong angles, dynamic crops, impactful text. Fast visual rhythm.""",
+
+        "product_focus": """PRODUCT FOCUS STYLE (Hero Shots):
+- Frame 1: Hero product shot - centered, prominent, glowing
+- Frame 2: Feature callout - highlight key benefit with text
+- Frame 3: Social proof or trust - badges, reviews sentiment
+- Frame 4: CTA with product - final beauty shot + button
+COMPOSITION: Product is the star. Clean backgrounds, product fills 70% of frame.""",
+
+        "lifestyle": """LIFESTYLE STYLE (Contextual Storytelling):
+- Frame 1: Scene setting - environment/mood establishing shot
+- Frame 2: Product in context - natural usage scenario
+- Frame 3: Emotional benefit - how it makes you feel
+- Frame 4: Aspirational CTA - "Join the lifestyle" feeling
+COMPOSITION: Full environmental shots, product integrated naturally, storytelling focus."""
+    }
+
+    # Mood modifiers
+    mood_modifiers = {
+        "luxury": "MOOD: Elegant, sophisticated, premium. Use subtle animations, refined typography, muted color transitions. Think Chanel, Rolex, high-end fashion.",
+        "playful": "MOOD: Fun, energetic, youthful. Bright accents OK, bouncy animations, friendly copy. Think Nike, Glossier, modern DTC brands.",
+        "bold": "MOOD: Striking, confident, unapologetic. Strong contrasts, impactful headlines, powerful imagery. Think Supreme, Beats, athletic brands.",
+        "minimal": "MOOD: Clean, refined, understated. Maximum whitespace, simple typography, subtle effects. Think Apple, Muji, Scandinavian design."
+    }
+
+    # Pacing/timing presets (in milliseconds per frame)
+    pacing_timings = {
+        "slow": [4500, 4500, 4500, 5000],      # Cinematic, let it breathe
+        "balanced": [3500, 3500, 3500, 4000],   # Standard rhythm
+        "fast": [2500, 2500, 2500, 3000]        # Quick cuts, energy
+    }
+
+    style_instruction = style_templates.get(video_style, style_templates["editorial"])
+    mood_instruction = mood_modifiers.get(mood, mood_modifiers["luxury"])
+    timing_values = pacing_timings.get(pacing, pacing_timings["balanced"])
+
     system_prompt = f"""You are a premium video ad designer. Create cinematic Instagram Reel HTML videos.
+
+🎬 CREATIVE DIRECTION:
+{style_instruction}
+
+{mood_instruction}
 
 ⚠️ INSTAGRAM SAFE ZONES - CRITICAL:
 - TOP 250px: Username/follow button overlay - NO important content
@@ -1512,7 +1578,7 @@ COMPOSITION:
 {"- You CAN use generic premium phrases like 'Elevate Your Style' for transitions" if features.smart_copy else ""}
 {"- Feature claims MUST come from the extracted features list" if features.smart_copy else ""}
 
-Add at end: <script>const timing = [3500, 3500, 3500, 3500, 3500];</script>
+Add at end: <script>const timing = {timing_values};</script>
 
 Return ONLY complete HTML. No explanations."""
 
@@ -1760,9 +1826,36 @@ async def home():
         .color-preview { display: flex; align-items: center; gap: 10px; }
         .color-preview span { font-size: 13px; color: #888; }
 
+        /* Creative direction */
+        .creative-section { margin: 25px 0; padding: 20px; background: #111; border-radius: 12px; border: 1px solid #222; }
+        .creative-section h3 { font-size: 16px; margin-bottom: 20px; color: #ccc; display: flex; align-items: center; gap: 8px; }
+        .creative-section h3::before { content: '🎬'; }
+        .creative-grid { display: flex; flex-direction: column; gap: 20px; }
+        .creative-group label:first-child { display: block; font-size: 13px; color: #888; margin-bottom: 10px; }
+
+        /* Radio cards for video style */
+        .radio-cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        .radio-card { cursor: pointer; }
+        .radio-card input { display: none; }
+        .radio-card .card-content { display: flex; flex-direction: column; align-items: center; padding: 15px 10px; background: #1a1a1a; border: 2px solid #333; border-radius: 12px; transition: all 0.2s; text-align: center; }
+        .radio-card:hover .card-content { border-color: #444; background: #222; }
+        .radio-card input:checked + .card-content { border-color: #6366f1; background: rgba(99,102,241,0.1); }
+        .radio-card .card-icon { font-size: 24px; margin-bottom: 8px; }
+        .radio-card .card-title { font-size: 14px; font-weight: 600; color: white; margin-bottom: 4px; }
+        .radio-card .card-desc { font-size: 11px; color: #888; }
+
+        /* Pill options for mood/pacing */
+        .pill-options { display: flex; flex-wrap: wrap; gap: 8px; }
+        .pill-option { cursor: pointer; }
+        .pill-option input { display: none; }
+        .pill-option span { display: inline-block; padding: 10px 16px; background: #1a1a1a; border: 1px solid #333; border-radius: 25px; font-size: 13px; color: #aaa; transition: all 0.2s; }
+        .pill-option:hover span { border-color: #444; color: white; }
+        .pill-option input:checked + span { border-color: #6366f1; background: rgba(99,102,241,0.15); color: white; }
+
         @media (max-width: 600px) {
             .features-grid { grid-template-columns: 1fr; }
             .style-row { flex-direction: column; gap: 15px; }
+            .radio-cards { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -1866,6 +1959,66 @@ async def home():
                 </div>
             </div>
 
+            <div class="creative-section">
+                <h3>Creative Direction</h3>
+                <div class="creative-grid">
+                    <div class="creative-group">
+                        <label>Video Style</label>
+                        <div class="radio-cards">
+                            <label class="radio-card">
+                                <input type="radio" name="videoStyle" value="editorial" checked>
+                                <span class="card-content">
+                                    <span class="card-icon">📸</span>
+                                    <span class="card-title">Editorial</span>
+                                    <span class="card-desc">Fashion magazine feel</span>
+                                </span>
+                            </label>
+                            <label class="radio-card">
+                                <input type="radio" name="videoStyle" value="dynamic">
+                                <span class="card-content">
+                                    <span class="card-icon">⚡</span>
+                                    <span class="card-title">Dynamic</span>
+                                    <span class="card-desc">Fast cuts, energy</span>
+                                </span>
+                            </label>
+                            <label class="radio-card">
+                                <input type="radio" name="videoStyle" value="product_focus">
+                                <span class="card-content">
+                                    <span class="card-icon">🎯</span>
+                                    <span class="card-title">Product Focus</span>
+                                    <span class="card-desc">Hero product shots</span>
+                                </span>
+                            </label>
+                            <label class="radio-card">
+                                <input type="radio" name="videoStyle" value="lifestyle">
+                                <span class="card-content">
+                                    <span class="card-icon">🌟</span>
+                                    <span class="card-title">Lifestyle</span>
+                                    <span class="card-desc">Contextual scenes</span>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="creative-group">
+                        <label>Mood</label>
+                        <div class="pill-options">
+                            <label class="pill-option"><input type="radio" name="mood" value="luxury" checked><span>✨ Luxury</span></label>
+                            <label class="pill-option"><input type="radio" name="mood" value="playful"><span>🎈 Playful</span></label>
+                            <label class="pill-option"><input type="radio" name="mood" value="bold"><span>💥 Bold</span></label>
+                            <label class="pill-option"><input type="radio" name="mood" value="minimal"><span>◽ Minimal</span></label>
+                        </div>
+                    </div>
+                    <div class="creative-group">
+                        <label>Pacing</label>
+                        <div class="pill-options">
+                            <label class="pill-option"><input type="radio" name="pacing" value="slow"><span>🎬 Slow & Cinematic</span></label>
+                            <label class="pill-option"><input type="radio" name="pacing" value="balanced" checked><span>⚖️ Balanced</span></label>
+                            <label class="pill-option"><input type="radio" name="pacing" value="fast"><span>🚀 Fast & Energetic</span></label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <button type="submit" id="submitBtn">Generate Video</button>
         </form>
 
@@ -1909,7 +2062,11 @@ async def home():
                 // Style options
                 font_family: document.getElementById('fontSelect').value,
                 text_color: document.getElementById('textColor').value,
-                accent_color: document.getElementById('accentColor').value
+                accent_color: document.getElementById('accentColor').value,
+                // Creative direction
+                video_style: document.querySelector('input[name="videoStyle"]:checked').value,
+                mood: document.querySelector('input[name="mood"]:checked').value,
+                pacing: document.querySelector('input[name="pacing"]:checked').value
             };
         }
 
