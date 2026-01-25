@@ -1113,6 +1113,13 @@ body {{ background: #0a0a0a; }}
 .frame.active .lifestyle-img {{ animation: none; opacity: 1; }}  /* NO animation, just static */
 .lifestyle-overlay {{ position: absolute; bottom: 0; left: 0; width: 100%; height: 50%; background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.4) 50%, transparent 100%); z-index: 1; }}
 
+/* LIFESTYLE TEXT - Only show ONE headline, hide extras */
+.frame.lifestyle .text-area {{ z-index: 10; }}
+.frame.lifestyle .text-area h1:not(:first-of-type) {{ display: none; }}  /* Hide extra h1s */
+.frame.lifestyle .text-area p:not(:first-of-type) {{ display: none; }}  /* Hide extra paragraphs */
+.frame.lifestyle .trust-badges {{ display: none; }}  /* No trust badges */
+.frame.lifestyle .price-badge {{ display: none; }}  /* No price badges */
+
 /* AI BACKGROUND TREATMENT - Cinematic atmosphere */
 .ai-bg {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.6; z-index: 0; }}
 .frame.ai-background .ai-bg {{ animation: bgPulse 6s ease-in-out infinite; }}
