@@ -147,41 +147,53 @@ async def render_video_from_html(html_content: str, video_id: str, format: str =
                 }""")
 
                 for slide_num in range(frame_count):
-                    # Smooth transition: add exit to previous, active to current
-                    await page.evaluate(f"""(slideNum) => {{
-                        document.querySelectorAll('.frame').forEach((f, i) => {{
-                            if (f.classList.contains('active') && i !== slideNum) {{
-                                f.classList.add('exit');
-                                f.classList.remove('active');
-                            }}
-                            if (i === slideNum) {{
-                                f.classList.add('active');
-                            }}
-                        }});
-                    }}""", slide_num)
-
-                    # Capture transition frames (first 0.5 seconds)
-                    transition_frames = int(0.5 * fps)  # 15 frames at 30fps
-                    for i in range(transition_frames):
-                        await page.screenshot(path=f"{output_folder}/frame_{frame_index:04d}.png")
-                        frame_index += 1
-                        await page.wait_for_timeout(int(1000 / fps))
-
-                    # Remove exit class after transition
-                    await page.evaluate("""() => {
-                        document.querySelectorAll('.frame.exit').forEach(f => f.classList.remove('exit'));
-                    }""")
-
-                    # Capture remaining hold frames
                     slide_duration_ms = timing[slide_num] if slide_num < len(timing) else 3000
-                    hold_frames = int((slide_duration_ms / 1000) * fps) - transition_frames
 
-                    for i in range(max(0, hold_frames)):
-                        await page.screenshot(path=f"{output_folder}/frame_{frame_index:04d}.png")
-                        frame_index += 1
-                        await page.wait_for_timeout(int(1000 / fps))
+                    if slide_num == 0:
+                        # First slide - just activate and capture
+                        await page.evaluate("""() => {
+                            document.querySelectorAll('.frame')[0].classList.add('active');
+                        }""")
+                        await page.wait_for_timeout(100)  # Let animations start
 
-                    video_jobs[video_id]["progress"] = int((slide_num / frame_count) * 100)
+                        # Capture frames for this slide
+                        slide_frames = int((slide_duration_ms / 1000) * fps)
+                        for i in range(slide_frames):
+                            await page.screenshot(path=f"{output_folder}/frame_{frame_index:04d}.png")
+                            frame_index += 1
+                            await page.wait_for_timeout(int(1000 / fps))
+                    else:
+                        # Transition: fade out previous, fade in current
+                        await page.evaluate(f"""(slideNum) => {{
+                            const frames = document.querySelectorAll('.frame');
+                            // Start exit on previous
+                            frames[slideNum - 1].classList.add('exit');
+                            frames[slideNum - 1].classList.remove('active');
+                            // Start enter on current
+                            frames[slideNum].classList.add('active');
+                        }}""", slide_num)
+
+                        # Capture transition (1 second crossfade)
+                        transition_duration = 1.0
+                        transition_frames = int(transition_duration * fps)
+                        for i in range(transition_frames):
+                            await page.screenshot(path=f"{output_folder}/frame_{frame_index:04d}.png")
+                            frame_index += 1
+                            await page.wait_for_timeout(int(1000 / fps))
+
+                        # Clean up exit class
+                        await page.evaluate(f"""(slideNum) => {{
+                            document.querySelectorAll('.frame')[slideNum - 1].classList.remove('exit');
+                        }}""", slide_num)
+
+                        # Capture hold frames (remaining duration minus transition)
+                        hold_frames = int((slide_duration_ms / 1000) * fps) - transition_frames
+                        for i in range(max(0, hold_frames)):
+                            await page.screenshot(path=f"{output_folder}/frame_{frame_index:04d}.png")
+                            frame_index += 1
+                            await page.wait_for_timeout(int(1000 / fps))
+
+                    video_jobs[video_id]["progress"] = int(((slide_num + 1) / frame_count) * 100)
                     print(f"✅ [{video_id}] Slide {slide_num + 1}/{frame_count}")
 
             else:
@@ -346,9 +358,9 @@ body { background: #0a0a0a; }
 }
 
 /* FRAME TRANSITIONS - Respects Instagram safe zones */
-.frame { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 280px; padding-right: 80px; transition: opacity 0.6s ease-in-out; }
-.frame.active { opacity: 1; }
-.frame.exit { opacity: 0; }
+.frame { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 280px; padding-right: 80px; transition: opacity 1s ease-in-out; }
+.frame.active { opacity: 1; transition: opacity 1s ease-in-out; }
+.frame.exit { opacity: 0; transition: opacity 1s ease-in-out; }
 
 /* Safe zone helper - content container */
 .safe-zone { position: absolute; top: 250px; left: 60px; right: 170px; bottom: 420px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
