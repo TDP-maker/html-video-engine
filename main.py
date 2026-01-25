@@ -62,6 +62,187 @@ async def verify_api_key(api_key: str = Depends(api_key_header)):
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
     return True
 
+# --- TEMPLATE SNIPPETS ---
+# Reusable HTML components extracted from successful video templates
+# Use these for consistent, proven layouts
+
+TEMPLATE_SNIPPETS = {
+    # Hero product frame with floating animation and brand glow
+    "product_hero": '''<div class="frame active">
+  <div class="bg-glow"></div>
+  <div class="product-wrap">
+    <img src="{image_url}" class="product-img" alt="{product_name}">
+  </div>
+  <div class="text-area">
+    <h1 class="text-clamp-2">{headline}</h1>
+    <p class="text-clamp-3">{subheadline}</p>
+    <div class="accent-line"></div>
+  </div>
+</div>''',
+
+    # Lifestyle frame with full-bleed image and gradient overlay
+    "lifestyle": '''<div class="frame lifestyle active">
+  <img src="{image_url}" class="lifestyle-img" alt="{product_name}">
+  <div class="lifestyle-overlay"></div>
+  <div class="text-area">
+    <h1 class="text-clamp-2">{headline}</h1>
+    <p class="text-clamp-3">{subheadline}</p>
+  </div>
+</div>''',
+
+    # Product with AI-generated cinematic background
+    "ai_background": '''<div class="frame ai-background active">
+  <img src="{ai_bg_url}" class="ai-bg" alt="background">
+  <div class="ai-bg-overlay"></div>
+  <div class="product-wrap">
+    <img src="{image_url}" class="product-img" alt="{product_name}">
+  </div>
+  <div class="text-area">
+    <h1 class="text-clamp-2">{headline}</h1>
+    <p class="text-clamp-3">{subheadline}</p>
+  </div>
+</div>''',
+
+    # Call-to-action frame with animated button
+    "cta_frame": '''<div class="frame active">
+  <div class="bg-glow"></div>
+  <div class="product-wrap">
+    <img src="{image_url}" class="product-img" alt="{product_name}">
+  </div>
+  <div class="text-area">
+    <h1 class="text-clamp-2">{headline}</h1>
+    <button class="cta-button">{cta_text}</button>
+  </div>
+</div>''',
+
+    # Feature highlight frame with accent styling
+    "feature_frame": '''<div class="frame active">
+  <div class="bg-glow"></div>
+  <div class="product-wrap">
+    <img src="{image_url}" class="product-img" alt="{product_name}">
+  </div>
+  <div class="text-area">
+    <h1 class="text-gradient text-clamp-2">{headline}</h1>
+    <p class="subtitle-brand text-clamp-3">{feature_text}</p>
+    <div class="accent-line"></div>
+  </div>
+</div>''',
+
+    # Price badge component
+    "price_badge": '''<div class="price-badge">
+  <span class="price-original">{original_price}</span>
+  <span class="price-current">{current_price}</span>
+  <span class="price-discount">{discount_percent}% OFF</span>
+</div>''',
+
+    # Simple price badge (no discount)
+    "price_badge_simple": '''<div class="price-badge">
+  <span class="price-current">{price}</span>
+</div>''',
+
+    # Trust badges component
+    "trust_badges": '''<div class="trust-badges">
+  <div class="trust-badge"><span class="icon">🚚</span><span class="text">Free Shipping</span></div>
+  <div class="trust-badge"><span class="icon">✓</span><span class="text">100% Authentic</span></div>
+  <div class="trust-badge"><span class="icon">⚡</span><span class="text">Fast Delivery</span></div>
+</div>''',
+
+    # Custom trust badges (configurable)
+    "trust_badges_custom": '''<div class="trust-badges">
+  {badges}
+</div>''',
+
+    # Single trust badge
+    "trust_badge_item": '''<div class="trust-badge"><span class="icon">{icon}</span><span class="text">{text}</span></div>''',
+
+    # Progress bar component
+    "progress_bar": '''<div class="progress-bar">
+  <div class="progress-segment active"></div>
+  <div class="progress-segment"></div>
+  <div class="progress-segment"></div>
+  <div class="progress-segment"></div>
+</div>''',
+
+    # Cinematic overlays (add as last children of reel-container)
+    "cinematic_overlays": '''<div class="vignette"></div>
+<div class="film-grain"></div>
+<div class="color-grade"></div>''',
+
+    # Base reel container structure
+    "reel_container": '''<div class="reel-container">
+  <div class="bg-glow"></div>
+  {frames}
+  <div class="vignette"></div>
+  <div class="film-grain"></div>
+  <div class="color-grade"></div>
+</div>''',
+
+    # Gradient headline variations
+    "headline_gradient": '''<h1 class="text-gradient text-clamp-2">{headline}</h1>''',
+    "headline_gradient_bold": '''<h1 class="text-gradient-bold text-clamp-2">{headline}</h1>''',
+    "headline_brand": '''<h1 class="text-brand text-clamp-2">{headline}</h1>''',
+
+    # Text with highlighted keyword
+    "headline_highlight": '''<h1 class="text-clamp-2">{prefix} <span class="highlight">{keyword}</span> {suffix}</h1>''',
+}
+
+
+def get_template_snippet(name: str, **kwargs) -> str:
+    """Get a template snippet with variables replaced.
+
+    Args:
+        name: Name of the snippet (e.g., 'product_hero', 'lifestyle', 'cta_frame')
+        **kwargs: Variables to replace in the template
+
+    Returns:
+        Formatted HTML string with variables replaced
+
+    Example:
+        >>> get_template_snippet('product_hero',
+        ...     image_url='https://example.com/shoe.png',
+        ...     product_name='Nike Air Max',
+        ...     headline='Step Into Style',
+        ...     subheadline='Comfort meets design')
+    """
+    if name not in TEMPLATE_SNIPPETS:
+        raise ValueError(f"Unknown template snippet: {name}. Available: {list(TEMPLATE_SNIPPETS.keys())}")
+
+    template = TEMPLATE_SNIPPETS[name]
+
+    # Replace all provided variables
+    for key, value in kwargs.items():
+        template = template.replace(f"{{{key}}}", str(value) if value else "")
+
+    return template
+
+
+def list_template_snippets() -> dict:
+    """List all available template snippets with descriptions.
+
+    Returns:
+        Dictionary of snippet names with their templates
+    """
+    return {
+        "product_hero": "Hero product frame with floating animation and brand glow",
+        "lifestyle": "Full-bleed lifestyle image with gradient overlay",
+        "ai_background": "Product with AI-generated cinematic background",
+        "cta_frame": "Call-to-action frame with animated button",
+        "feature_frame": "Feature highlight with accent styling",
+        "price_badge": "Price badge with original price, current price, and discount",
+        "price_badge_simple": "Simple price badge (no discount)",
+        "trust_badges": "Default trust badges (shipping, authentic, fast delivery)",
+        "trust_badges_custom": "Customizable trust badges container",
+        "trust_badge_item": "Single trust badge item",
+        "progress_bar": "4-segment video progress bar",
+        "cinematic_overlays": "Vignette, film grain, and color grade overlays",
+        "reel_container": "Base reel container with overlays",
+        "headline_gradient": "Gradient text headline",
+        "headline_gradient_bold": "Bold gradient text headline with brand colors",
+        "headline_brand": "Brand-colored headline with glow",
+        "headline_highlight": "Headline with highlighted keyword",
+    }
+
+
 # --- DATA MODELS ---
 
 class VideoBrief(BaseModel):
@@ -197,9 +378,21 @@ async def render_video(brief: VideoBrief, video_id: str = None):
         print(f"❌ Render Error: {e}")
 
 
-async def render_video_from_html(html_content: str, video_id: str, format: str = "reel", fps: int = 30):
-    """Render video from custom HTML with multiple frames"""
+async def render_video_from_html(html_content: str, video_id: str, format: str = "reel", fps: int = 30, motion_blur: bool = True):
+    """Render video from custom HTML with multiple frames
+
+    Args:
+        html_content: Custom HTML to render
+        video_id: Unique identifier for the video
+        format: Video format (reel, square, landscape)
+        fps: Output frames per second (default 30)
+        motion_blur: If True, render at 2x fps internally and blend frames for motion blur effect
+    """
     width, height = FORMAT_DIMENSIONS.get(format, FORMAT_DIMENSIONS["reel"])
+
+    # For motion blur, render at double fps internally
+    render_fps = fps * 2 if motion_blur else fps
+    output_fps = fps
 
     current_folder = os.getcwd()
     output_folder = os.path.join(current_folder, "frames", video_id)
@@ -227,7 +420,7 @@ async def render_video_from_html(html_content: str, video_id: str, format: str =
             frame_index = 0
             if has_frames:
                 frame_count = await page.evaluate("() => document.querySelectorAll('.frame').length")
-                print(f"📊 [{video_id}] Detected {frame_count} frames")
+                print(f"📊 [{video_id}] Detected {frame_count} frames (render_fps={render_fps}, output_fps={output_fps}, motion_blur={motion_blur})")
 
                 timing = await page.evaluate("""() => {
                     return window.timing || Array(document.querySelectorAll('.frame').length).fill(3000);
@@ -243,10 +436,10 @@ async def render_video_from_html(html_content: str, video_id: str, format: str =
                         }""")
                         await page.wait_for_timeout(500)  # Wait for CSS to fully apply
 
-                        # Capture frames for this slide
-                        slide_frames = int((slide_duration_ms / 1000) * fps)
+                        # Capture frames for this slide (at render_fps for motion blur)
+                        slide_frames = int((slide_duration_ms / 1000) * render_fps)
                         for i in range(slide_frames):
-                            await page.wait_for_timeout(int(1000 / fps))  # Wait first for stable frame
+                            await page.wait_for_timeout(int(1000 / render_fps))  # Wait first for stable frame
                             await page.screenshot(path=f"{output_folder}/frame_{frame_index:04d}.png")
                             frame_index += 1
                     else:
@@ -262,9 +455,9 @@ async def render_video_from_html(html_content: str, video_id: str, format: str =
 
                         # Capture transition (1.5 second smooth crossfade)
                         transition_duration = 1.5
-                        transition_frames = int(transition_duration * fps)
+                        transition_frames = int(transition_duration * render_fps)
                         for i in range(transition_frames):
-                            await page.wait_for_timeout(int(1000 / fps))  # Wait first, then capture
+                            await page.wait_for_timeout(int(1000 / render_fps))  # Wait first, then capture
                             await page.screenshot(path=f"{output_folder}/frame_{frame_index:04d}.png")
                             frame_index += 1
 
@@ -274,9 +467,9 @@ async def render_video_from_html(html_content: str, video_id: str, format: str =
                         }}""", slide_num)
 
                         # Capture hold frames (remaining duration minus transition)
-                        hold_frames = int((slide_duration_ms / 1000) * fps) - transition_frames
+                        hold_frames = int((slide_duration_ms / 1000) * render_fps) - transition_frames
                         for i in range(max(0, hold_frames)):
-                            await page.wait_for_timeout(int(1000 / fps))  # Wait first for stable frame
+                            await page.wait_for_timeout(int(1000 / render_fps))  # Wait first for stable frame
                             await page.screenshot(path=f"{output_folder}/frame_{frame_index:04d}.png")
                             frame_index += 1
 
@@ -285,32 +478,47 @@ async def render_video_from_html(html_content: str, video_id: str, format: str =
 
             else:
                 duration = 5
-                total_frames = fps * duration
-                print(f"📊 [{video_id}] Single frame mode")
+                total_frames = render_fps * duration
+                print(f"📊 [{video_id}] Single frame mode (render_fps={render_fps}, output_fps={output_fps})")
 
                 has_seek = await page.evaluate("() => typeof window.seekToFrame === 'function'")
 
                 for frame in range(total_frames):
                     if has_seek:
-                        await page.evaluate(f"window.seekToFrame({frame}, {fps})")
+                        await page.evaluate(f"window.seekToFrame({frame}, {render_fps})")
                     else:
-                        await page.wait_for_timeout(int(1000 / fps))
+                        await page.wait_for_timeout(int(1000 / render_fps))
                     await page.screenshot(path=f"{output_folder}/frame_{frame_index:04d}.png")
                     frame_index += 1
                     video_jobs[video_id]["progress"] = int((frame / total_frames) * 100)
 
             await browser.close()
 
-        # Compile video
+        # Compile video with optional motion blur
         video_name = f"{videos_folder}/{video_id}.mp4"
         ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
-        subprocess.run([
-            ffmpeg_exe, "-y", "-r", str(fps),
-            "-i", f"{output_folder}/frame_%04d.png",
-            "-vcodec", "libx264", "-pix_fmt", "yuv420p",
-            "-preset", "fast", "-crf", "23",
-            video_name
-        ])
+
+        if motion_blur:
+            # Motion blur: blend adjacent frames (tblend) then reduce framerate
+            # This creates smooth motion blur effect from 60fps -> 30fps
+            print(f"🎬 [{video_id}] Applying motion blur (render={render_fps}fps -> output={output_fps}fps)")
+            subprocess.run([
+                ffmpeg_exe, "-y", "-r", str(render_fps),
+                "-i", f"{output_folder}/frame_%04d.png",
+                "-vf", f"tblend=all_mode=average,fps={output_fps}",
+                "-vcodec", "libx264", "-pix_fmt", "yuv420p",
+                "-preset", "fast", "-crf", "23",
+                video_name
+            ])
+        else:
+            # Standard rendering without motion blur
+            subprocess.run([
+                ffmpeg_exe, "-y", "-r", str(output_fps),
+                "-i", f"{output_folder}/frame_%04d.png",
+                "-vcodec", "libx264", "-pix_fmt", "yuv420p",
+                "-preset", "fast", "-crf", "23",
+                video_name
+            ])
 
         video_jobs[video_id] = {"status": "complete", "progress": 100, "file": video_name}
         print(f"✅ [{video_id}] Render Complete")
@@ -1170,7 +1378,99 @@ def adjust_color_for_dark_bg(hex_color: str, min_brightness: int = 120) -> str:
     return rgb_to_hex(r, g, b)
 
 
-async def extract_colors_from_image(image_url: str) -> dict:
+def get_category_color_palette(category: str) -> dict:
+    """Get category-appropriate color palette instead of generic gold
+
+    Returns a color palette optimized for the product category that creates
+    better visual harmony than the default warm gold theme.
+    """
+    palettes = {
+        "party": {
+            # Festive, celebratory colors
+            "primary": "#e91e63",      # Vibrant pink
+            "secondary": "#9c27b0",    # Purple
+            "accent": "#ff4081",       # Hot pink
+            "primary_name": "vibrant pink",
+            "secondary_name": "purple",
+            "accent_name": "hot pink"
+        },
+        "fashion": {
+            # Elegant, sophisticated neutrals
+            "primary": "#8d6e63",      # Warm taupe
+            "secondary": "#5d4037",    # Deep brown
+            "accent": "#bcaaa4",       # Light taupe
+            "primary_name": "warm taupe",
+            "secondary_name": "deep brown",
+            "accent_name": "light taupe"
+        },
+        "footwear": {
+            # Urban, streetwear energy
+            "primary": "#ff5722",      # Deep orange
+            "secondary": "#bf360c",    # Burnt orange
+            "accent": "#ff9800",       # Orange
+            "primary_name": "deep orange",
+            "secondary_name": "burnt orange",
+            "accent_name": "orange"
+        },
+        "beauty": {
+            # Soft, luxurious, spa-like
+            "primary": "#f8bbd9",      # Soft pink
+            "secondary": "#ce93d8",    # Lavender
+            "accent": "#f48fb1",       # Rose
+            "primary_name": "soft pink",
+            "secondary_name": "lavender",
+            "accent_name": "rose"
+        },
+        "tech": {
+            # Clean, modern, Apple-esque
+            "primary": "#42a5f5",      # Sky blue
+            "secondary": "#1976d2",    # Deep blue
+            "accent": "#64b5f6",       # Light blue
+            "primary_name": "sky blue",
+            "secondary_name": "deep blue",
+            "accent_name": "light blue"
+        },
+        "food": {
+            # Warm, appetizing, earthy
+            "primary": "#8bc34a",      # Light green
+            "secondary": "#689f38",    # Green
+            "accent": "#ffb74d",       # Amber
+            "primary_name": "light green",
+            "secondary_name": "green",
+            "accent_name": "amber"
+        },
+        "home": {
+            # Neutral, warm, inviting
+            "primary": "#a1887f",      # Warm grey
+            "secondary": "#6d4c41",    # Brown
+            "accent": "#d7ccc8",       # Light grey
+            "primary_name": "warm grey",
+            "secondary_name": "brown",
+            "accent_name": "light grey"
+        },
+        "general": {
+            # Original warm gold fallback for unknown categories
+            "primary": "#c9a96e",      # Warm gold
+            "secondary": "#8b7355",    # Warm bronze
+            "accent": "#d4af37",       # Classic gold
+            "primary_name": "warm gold",
+            "secondary_name": "warm bronze",
+            "accent_name": "classic gold"
+        }
+    }
+
+    palette = palettes.get(category, palettes["general"])
+
+    # Add original colors (same as adjusted for this case)
+    return {
+        **palette,
+        "original_primary": palette["primary"],
+        "original_secondary": palette["secondary"],
+        "original_accent": palette["accent"]
+    }
+
+
+async def extract_colors_from_image(image_url: str, category: str = "general") -> dict:
     """Extract dominant colors from a product image using k-means clustering"""
     try:
         print(f"🎨 Extracting colors from image...")
@@ -1256,9 +1556,10 @@ async def extract_colors_from_image(image_url: str) -> dict:
                     # Shifted hue
                     selected_colors.append((g, b, r))
             else:
-                # Fallback to warm gold theme (matches default colors)
-                selected_colors = [(201, 169, 110), (139, 115, 85), (212, 175, 55)]
-                break
+                # Fallback to category-appropriate colors instead of generic gold
+                category_palette = get_category_color_palette(category)
+                print(f"🎨 Using category-based fallback colors for '{category}'")
+                return category_palette
 
         # Convert to hex and adjust for dark backgrounds
         primary_hex = rgb_to_hex(*selected_colors[0])
@@ -1274,8 +1575,8 @@ async def extract_colors_from_image(image_url: str) -> dict:
             return saturation < 0.15  # Very low saturation = gray/white
 
         if all(is_neutral(c) for c in selected_colors):
-            print(f"⚠️ Extracted colors too neutral, using warm gold fallback")
-            return None  # Will trigger default warm gold theme
+            print(f"⚠️ Extracted colors too neutral, using category-based fallback for '{category}'")
+            return get_category_color_palette(category)
 
         # Adjust colors for visibility on dark background
         primary_adjusted = adjust_color_for_dark_bg(primary_hex)
@@ -1339,9 +1640,10 @@ async def generate_html_from_url(url: str, prompt: str = "", features: VideoFeat
     is_lifestyle_product = product_category in lifestyle_categories
 
     # Premium feature: Extract brand colors from product image (if enabled)
+    # Pass product category for smarter fallback colors when extraction fails
     brand_colors = None
     if features.color_extraction and product_images:
-        brand_colors = await extract_colors_from_image(product_images[0])
+        brand_colors = await extract_colors_from_image(product_images[0], category=product_category)
 
     # Premium feature: Remove backgrounds - BUT skip for lifestyle categories
     # Fashion/clothing looks terrible as floating cutouts - keep the context!
@@ -1437,14 +1739,15 @@ async def generate_html_from_url(url: str, prompt: str = "", features: VideoFeat
         accent_rgb = hex_to_rgb(accent_color)
         color_description = f"Brand colors extracted: {brand_colors['primary_name']} ({primary_color}), {brand_colors['secondary_name']} ({secondary_color}), {brand_colors['accent_name']} ({accent_color})"
     else:
-        # Default neutral/warm theme - works for any product
-        primary_color = "#c9a96e"    # Warm gold
-        secondary_color = "#8b7355"  # Warm bronze
-        accent_color = "#d4af37"     # Classic gold
-        primary_rgb = (201, 169, 110)
-        secondary_rgb = (139, 115, 85)
-        accent_rgb = (212, 175, 55)
-        color_description = "Using neutral warm gold theme (no brand colors extracted)"
+        # Use category-appropriate colors instead of generic gold
+        category_palette = get_category_color_palette(product_category)
+        primary_color = category_palette["primary"]
+        secondary_color = category_palette["secondary"]
+        accent_color = category_palette["accent"]
+        primary_rgb = hex_to_rgb(primary_color)
+        secondary_rgb = hex_to_rgb(secondary_color)
+        accent_rgb = hex_to_rgb(accent_color)
+        color_description = f"Using {product_category} category palette: {category_palette['primary_name']} ({primary_color}), {category_palette['secondary_name']} ({secondary_color}), {category_palette['accent_name']} ({accent_color})"
 
     # Override with custom accent color if provided
     if features.accent_color and features.accent_color != "#c9a96e":
@@ -1688,7 +1991,13 @@ body {{ background: #0a0a0a; -webkit-font-smoothing: antialiased; -moz-osx-font-
 
 /* PREMIUM TEXT STYLING - 15% from bottom, properly centered */
 /* Symmetric margins for true center alignment */
-.text-area {{ position: absolute; bottom: 300px; left: 80px; right: 80px; text-align: center; z-index: 10; }}
+.text-area {{
+  position: absolute; bottom: 300px; left: 80px; right: 80px;
+  text-align: center; z-index: 10;
+  /* Overflow prevention */
+  max-width: calc(100% - 160px);
+  overflow: hidden;
+}}
 h1 {{
   font-family: '{font_family}', sans-serif;
   font-size: clamp(48px, 7vw, 72px); /* Auto-scales based on container */
@@ -1702,6 +2011,45 @@ h1 {{
 /* Smaller headline variant for long text */
 h1.headline-sm {{ font-size: clamp(36px, 5vw, 56px); }}
 h1.headline-lg {{ font-size: clamp(56px, 8vw, 84px); }}
+
+/* TEXT OVERFLOW PREVENTION - Clean truncation with ellipsis */
+/* Single line ellipsis */
+.text-ellipsis {{
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}}
+/* Multi-line clamp with ellipsis - 2 lines */
+.text-clamp-2 {{
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}}
+/* Multi-line clamp with ellipsis - 3 lines */
+.text-clamp-3 {{
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}}
+/* Multi-line clamp with ellipsis - 4 lines */
+.text-clamp-4 {{
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}}
+/* Safe text area that won't overflow container */
+.text-safe {{
+  max-height: 400px;
+  overflow: hidden;
+}}
+
 /* Gradient text using brand colors */
 .text-gradient {{
   background: linear-gradient(135deg, #fff 0%, {accent_color} 50%, #fff 100%);
@@ -1723,7 +2071,15 @@ h1.headline-lg {{ font-size: clamp(56px, 8vw, 84px); }}
 .text-accent {{
   color: {accent_color};
 }}
-p {{ font-family: '{font_family}', sans-serif; font-size: 32px; font-weight: 400; color: {text_color}; opacity: 0.7; margin-top: 16px; letter-spacing: 1px; text-shadow: 0 2px 20px rgba(0,0,0,0.6); }}
+p {{
+  font-family: '{font_family}', sans-serif; font-size: 32px; font-weight: 400;
+  color: {text_color}; opacity: 0.7; margin-top: 16px; letter-spacing: 1px;
+  text-shadow: 0 2px 20px rgba(0,0,0,0.6);
+  /* Overflow prevention */
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
+}}
 /* Subtitle with brand color */
 p.subtitle-brand {{
   color: {primary_color};
@@ -1969,6 +2325,15 @@ PREMIUM ELEMENTS TO INCLUDE:
 {"   - class='highlight' - accent color for keywords within text" if features.text_effects else ""}
 {"   - p.subtitle-brand - subtitles in brand color" if features.text_effects else ""}
 {"   USE THESE to make text match the product's extracted colors!" if features.text_effects else ""}
+
+📝 TEXT OVERFLOW PREVENTION - ALWAYS use for long text:
+   - class='text-ellipsis' - single line truncation with ellipsis (...)
+   - class='text-clamp-2' - limit to 2 lines with ellipsis
+   - class='text-clamp-3' - limit to 3 lines with ellipsis
+   - class='text-clamp-4' - limit to 4 lines with ellipsis
+   - class='text-safe' - container that won't overflow (max-height with hidden overflow)
+   RULES: Headlines should use text-clamp-2, subtitles text-clamp-3. NEVER let text overflow frame!
+
 {"4. Add progress bar at top showing video segments" if features.progress_bar else ""}
 {"5. Add <button class='cta-button'>SHOP NOW</button> on the FINAL frame (animated CTA)" if features.cta_button else ""}
 {"6. Add PRICE BADGE when price is available - use this HTML structure:" if features.price_badge else ""}
@@ -2889,6 +3254,62 @@ async def download_latest():
     # Get most recent
     latest = max(videos, key=lambda x: os.path.getctime(os.path.join(videos_folder, x)))
     return FileResponse(f"{videos_folder}/{latest}", media_type="video/mp4", filename="creative.mp4")
+
+
+@app.get("/templates")
+async def get_templates():
+    """List all available template snippets with descriptions"""
+    return {
+        "snippets": list_template_snippets(),
+        "usage": "Use GET /templates/{name} to get a specific template, or POST /templates/{name} with JSON body to get a filled template"
+    }
+
+
+@app.get("/templates/{name}")
+async def get_template(name: str):
+    """Get a specific template snippet by name"""
+    if name not in TEMPLATE_SNIPPETS:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Template '{name}' not found. Available: {list(TEMPLATE_SNIPPETS.keys())}"
+        )
+    return {
+        "name": name,
+        "template": TEMPLATE_SNIPPETS[name],
+        "description": list_template_snippets().get(name, "")
+    }
+
+
+class TemplateRequest(BaseModel):
+    """Request body for filling a template with variables"""
+    variables: dict = {}
+
+
+@app.post("/templates/{name}")
+async def fill_template(name: str, request: TemplateRequest):
+    """Fill a template snippet with provided variables
+
+    Example:
+        POST /templates/product_hero
+        {
+            "variables": {
+                "image_url": "https://example.com/shoe.png",
+                "product_name": "Nike Air Max",
+                "headline": "Step Into Style",
+                "subheadline": "Comfort meets design"
+            }
+        }
+    """
+    try:
+        html = get_template_snippet(name, **request.variables)
+        return {
+            "name": name,
+            "html": html,
+            "variables_used": list(request.variables.keys())
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
