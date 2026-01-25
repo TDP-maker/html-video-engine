@@ -66,6 +66,9 @@ class VideoFeatures(BaseModel):
     floating_animation: bool = True      # Product float animation
     ken_burns: bool = True               # Slow zoom on lifestyle images
     smart_copy: bool = True              # Only use text from page (no hallucination)
+    price_badge: bool = True             # Animated price badge with sale strike-through
+    trust_badges: bool = True            # Trust badges (Free Shipping, Authentic, etc.)
+    multi_format: bool = False           # Generate multiple formats (9:16, 1:1, 16:9)
 
 class URLVideoRequest(BaseModel):
     """Generate video from URL + prompt"""
@@ -75,6 +78,13 @@ class URLVideoRequest(BaseModel):
     fps: int = 30
     record_id: str = ""  # Airtable record ID for tracking
     features: VideoFeatures = VideoFeatures()  # Feature toggles
+
+# --- FORMAT CONFIGURATIONS ---
+FORMAT_DIMENSIONS = {
+    "reel": (1080, 1920),      # 9:16 - Instagram Reels, TikTok, Stories
+    "square": (1080, 1080),    # 1:1 - Instagram Feed, Facebook
+    "landscape": (1920, 1080), # 16:9 - YouTube, Twitter, LinkedIn
+}
 
 # --- RENDER ENGINES ---
 
@@ -132,7 +142,7 @@ async def render_video(brief: VideoBrief, video_id: str = None):
 
 async def render_video_from_html(html_content: str, video_id: str, format: str = "reel", fps: int = 30):
     """Render video from custom HTML with multiple frames"""
-    width, height = (1080, 1080) if format == "square" else (1080, 1920)
+    width, height = FORMAT_DIMENSIONS.get(format, FORMAT_DIMENSIONS["reel"])
 
     current_folder = os.getcwd()
     output_folder = os.path.join(current_folder, "frames", video_id)
@@ -850,6 +860,9 @@ async def generate_html_from_url(url: str, prompt: str = "", features: VideoFeat
     if features.floating_animation: enabled_features.append("Float Animation")
     if features.ken_burns: enabled_features.append("Ken Burns")
     if features.smart_copy: enabled_features.append("Smart Copy")
+    if features.price_badge: enabled_features.append("Price Badge")
+    if features.trust_badges: enabled_features.append("Trust Badges")
+    if features.multi_format: enabled_features.append("Multi-Format")
     print(f"⚙️ Enabled features: {', '.join(enabled_features)}")
 
     client = OpenAI()
@@ -1026,6 +1039,115 @@ p {{ font-family: 'Inter', sans-serif; font-size: 32px; font-weight: 400; color:
   50% {{ opacity: 0.5; transform: scale(1.05); }}
 }}
 
+/* PRICE BADGE - Animated price tag with sale support */
+.price-badge {{
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 15px 30px;
+  background: linear-gradient(135deg, rgba(0,0,0,0.8), rgba(20,20,20,0.9));
+  border: 2px solid {primary_color};
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
+  opacity: 0;
+  transform: scale(0.8) rotate(-3deg);
+  box-shadow: 0 10px 40px rgba(0,0,0,0.5), 0 0 30px rgba({primary_rgb[0]},{primary_rgb[1]},{primary_rgb[2]},0.2);
+}}
+.price-badge::before {{
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 100%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+}}
+.frame.active .price-badge {{
+  animation: priceAppear 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.8s forwards;
+}}
+.frame.active .price-badge::before {{
+  animation: priceShine 2s ease-in-out 1.2s infinite;
+}}
+.price-current {{
+  font-family: 'Inter', sans-serif;
+  font-size: 48px;
+  font-weight: 900;
+  color: white;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+}}
+.price-original {{
+  font-family: 'Inter', sans-serif;
+  font-size: 24px;
+  font-weight: 400;
+  color: rgba(255,255,255,0.5);
+  text-decoration: line-through;
+  margin-bottom: 5px;
+}}
+.price-discount {{
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  background: linear-gradient(135deg, {secondary_color}, {primary_color});
+  color: white;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 8px 12px;
+  border-radius: 20px;
+  transform: rotate(10deg);
+  animation: discountPulse 1.5s ease-in-out infinite;
+}}
+@keyframes priceAppear {{
+  0% {{ opacity: 0; transform: scale(0.8) rotate(-3deg); }}
+  100% {{ opacity: 1; transform: scale(1) rotate(0deg); }}
+}}
+@keyframes priceShine {{
+  0% {{ left: -100%; }}
+  50%, 100% {{ left: 100%; }}
+}}
+@keyframes discountPulse {{
+  0%, 100% {{ transform: rotate(10deg) scale(1); }}
+  50% {{ transform: rotate(10deg) scale(1.1); }}
+}}
+
+/* TRUST BADGES - Animated trust indicators */
+.trust-badges {{
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 20px;
+  opacity: 0;
+  transform: translateY(20px);
+}}
+.frame.active .trust-badges {{
+  animation: trustAppear 0.6s ease-out 1s forwards;
+}}
+.trust-badge {{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 25px;
+  backdrop-filter: blur(10px);
+}}
+.trust-badge .icon {{
+  font-size: 18px;
+}}
+.trust-badge .text {{
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: white;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}}
+@keyframes trustAppear {{
+  0% {{ opacity: 0; transform: translateY(20px); }}
+  100% {{ opacity: 1; transform: translateY(0); }}
+}}
+
 /* PROGRESS BAR (top of screen) */
 .progress-bar {{ position: absolute; top: 60px; left: 80px; right: 80px; height: 4px; background: rgba(255,255,255,0.2); border-radius: 2px; z-index: 100; display: flex; gap: 8px; }}
 .progress-segment {{ flex: 1; height: 100%; background: rgba(255,255,255,0.3); border-radius: 2px; overflow: hidden; }}
@@ -1059,6 +1181,18 @@ PREMIUM ELEMENTS TO INCLUDE:
 {"3. Use class='text-gradient' on key words in headlines for gradient text effect" if features.text_effects else ""}
 {"4. Add progress bar at top showing video segments" if features.progress_bar else ""}
 {"5. Add <button class='cta-button'>SHOP NOW</button> on the FINAL frame (animated CTA)" if features.cta_button else ""}
+{"6. Add PRICE BADGE when price is available - use this HTML structure:" if features.price_badge else ""}
+{'''   <div class="price-badge">
+     <span class="price-original">$XX.XX</span>  <!-- Only if sale/original price exists -->
+     <span class="price-current">$XX.XX</span>
+     <span class="price-discount">XX% OFF</span>  <!-- Only if discount exists -->
+   </div>''' if features.price_badge else ""}
+{"7. Add TRUST BADGES on hero or CTA frame - use this HTML structure:" if features.trust_badges else ""}
+{'''   <div class="trust-badges">
+     <div class="trust-badge"><span class="icon">🚚</span><span class="text">Free Shipping</span></div>
+     <div class="trust-badge"><span class="icon">✓</span><span class="text">100% Authentic</span></div>
+     <div class="trust-badge"><span class="icon">⚡</span><span class="text">Fast Delivery</span></div>
+   </div>''' if features.trust_badges else ""}
 
 IMAGE TREATMENT - CHOOSE BASED ON IMAGE TYPE:
 
@@ -1187,6 +1321,30 @@ Return ONLY complete HTML. No explanations."""
     return html_content
 
 
+async def render_multi_format(html_content: str, base_video_id: str, fps: int = 30):
+    """Render the same HTML content in multiple formats (9:16, 1:1, 16:9)"""
+    formats = ["reel", "square", "landscape"]
+
+    for fmt in formats:
+        fmt_video_id = f"{base_video_id}_{fmt}"
+        video_jobs[fmt_video_id] = {"status": "queued", "progress": 0, "format": fmt}
+
+    for fmt in formats:
+        fmt_video_id = f"{base_video_id}_{fmt}"
+        print(f"🎬 [{fmt_video_id}] Starting {fmt} format render...")
+        await render_video_from_html(html_content, fmt_video_id, fmt, fps)
+
+    # Update the base job to track all formats
+    video_jobs[base_video_id] = {
+        "status": "complete",
+        "progress": 100,
+        "formats": {
+            fmt: f"{base_video_id}_{fmt}" for fmt in formats
+        }
+    }
+    print(f"✅ [{base_video_id}] All formats complete!")
+
+
 # --- API ENDPOINTS ---
 
 @app.get("/", response_class=HTMLResponse)
@@ -1232,6 +1390,15 @@ async def home():
         .feature-toggle input:checked + .toggle-switch::after { transform: translateX(18px); background: white; }
         .feature-toggle .label { font-size: 13px; color: #aaa; }
         .feature-toggle .label strong { display: block; color: white; font-size: 14px; margin-bottom: 2px; }
+        .feature-toggle.highlight { background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(236,72,153,0.1)); border: 1px solid rgba(99,102,241,0.3); }
+        .feature-toggle.highlight .label strong { background: linear-gradient(135deg, #6366f1, #ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+        .multi-download { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px; }
+        .multi-download a { padding: 10px 18px; background: #22c55e; border-radius: 6px; color: white; text-decoration: none; font-weight: 600; font-size: 14px; }
+        .multi-download a:hover { background: #16a34a; }
+        .multi-download a.reel { background: linear-gradient(135deg, #ec4899, #f43f5e); }
+        .multi-download a.square { background: linear-gradient(135deg, #6366f1, #8b5cf6); }
+        .multi-download a.landscape { background: linear-gradient(135deg, #14b8a6, #22c55e); }
 
         .api-info { margin-top: 40px; padding-top: 25px; border-top: 1px solid #222; }
         .api-info h3 { font-size: 16px; margin-bottom: 15px; }
@@ -1297,6 +1464,21 @@ async def home():
                         <span class="toggle-switch"></span>
                         <span class="label"><strong>Smart Copy</strong>Use only real page text</span>
                     </label>
+                    <label class="feature-toggle">
+                        <input type="checkbox" id="feat_price_badge" checked>
+                        <span class="toggle-switch"></span>
+                        <span class="label"><strong>Price Badge</strong>Animated price display</span>
+                    </label>
+                    <label class="feature-toggle">
+                        <input type="checkbox" id="feat_trust_badges" checked>
+                        <span class="toggle-switch"></span>
+                        <span class="label"><strong>Trust Badges</strong>Free shipping, authentic</span>
+                    </label>
+                    <label class="feature-toggle highlight">
+                        <input type="checkbox" id="feat_multi_format">
+                        <span class="toggle-switch"></span>
+                        <span class="label"><strong>Multi-Format</strong>9:16 + 1:1 + 16:9</span>
+                    </label>
                 </div>
             </div>
 
@@ -1336,9 +1518,15 @@ async def home():
                 text_effects: document.getElementById('feat_text_effects').checked,
                 floating_animation: document.getElementById('feat_floating_animation').checked,
                 ken_burns: true, // Always on for now
-                smart_copy: document.getElementById('feat_smart_copy').checked
+                smart_copy: document.getElementById('feat_smart_copy').checked,
+                price_badge: document.getElementById('feat_price_badge').checked,
+                trust_badges: document.getElementById('feat_trust_badges').checked,
+                multi_format: document.getElementById('feat_multi_format').checked
             };
         }
+
+        let currentMultiFormat = false;
+        let currentFormatIds = null;
 
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -1347,9 +1535,9 @@ async def home():
             const features = getFeatures();
 
             submitBtn.disabled = true;
-            submitBtn.textContent = 'Generating...';
+            submitBtn.textContent = features.multi_format ? 'Generating 3 Formats...' : 'Generating...';
             statusDiv.classList.remove('hidden');
-            statusText.textContent = 'Starting video generation...';
+            statusText.textContent = features.multi_format ? 'Starting multi-format generation...' : 'Starting video generation...';
             progressFill.style.width = '0%';
             downloadArea.innerHTML = '';
 
@@ -1362,6 +1550,8 @@ async def home():
                 const data = await res.json();
 
                 if (data.video_id) {
+                    currentMultiFormat = data.multi_format || false;
+                    currentFormatIds = data.format_ids || null;
                     pollStatus(data.video_id);
                 } else {
                     throw new Error(data.detail || 'Failed to start');
@@ -1375,15 +1565,30 @@ async def home():
 
         async function pollStatus(videoId) {
             try {
-                const res = await fetch('/status/' + videoId);
+                // For multi-format, poll the landscape format (last to complete)
+                const pollId = currentMultiFormat ? currentFormatIds.landscape : videoId;
+                const res = await fetch('/status/' + pollId);
                 const data = await res.json();
 
                 progressFill.style.width = data.progress + '%';
 
                 if (data.status === 'complete') {
-                    statusText.textContent = 'Video ready!';
                     progressFill.style.width = '100%';
-                    downloadArea.innerHTML = '<a href="/download/' + videoId + '" class="download-btn" download>Download Video</a>';
+
+                    if (currentMultiFormat && currentFormatIds) {
+                        statusText.textContent = 'All 3 formats ready!';
+                        downloadArea.innerHTML = `
+                            <div class="multi-download">
+                                <a href="/download/${currentFormatIds.reel}" class="reel" download>📱 Reel (9:16)</a>
+                                <a href="/download/${currentFormatIds.square}" class="square" download>⬜ Square (1:1)</a>
+                                <a href="/download/${currentFormatIds.landscape}" class="landscape" download>🖥️ Landscape (16:9)</a>
+                            </div>
+                        `;
+                    } else {
+                        statusText.textContent = 'Video ready!';
+                        downloadArea.innerHTML = '<a href="/download/' + videoId + '" class="download-btn" download>Download Video</a>';
+                    }
+
                     submitBtn.disabled = false;
                     submitBtn.textContent = 'Generate Another';
                 } else if (data.status === 'error') {
@@ -1391,7 +1596,8 @@ async def home():
                     submitBtn.disabled = false;
                     submitBtn.textContent = 'Try Again';
                 } else {
-                    statusText.textContent = 'Generating... ' + data.status + ' (' + data.progress + '%)';
+                    const formatLabel = currentMultiFormat ? ' (3 formats)' : '';
+                    statusText.textContent = 'Generating' + formatLabel + '... ' + data.status + ' (' + data.progress + '%)';
                     setTimeout(() => pollStatus(videoId), 1500);
                 }
             } catch (err) {
@@ -1440,17 +1646,36 @@ async def generate_from_url(request: URLVideoRequest, background_tasks: Backgrou
         html_content = await generate_html_from_url(request.url, request.prompt, request.features)
         print(f"✅ [{video_id}] HTML generated ({len(html_content)} chars)")
 
-        background_tasks.add_task(render_video_from_html, html_content, video_id, request.format, request.fps)
-
-        return {
-            "message": "Video generation started",
-            "status": "processing",
-            "video_id": video_id,
-            "record_id": request.record_id,
-            "url": request.url,
-            "format": request.format,
-            "features": request.features.model_dump()  # Return enabled features
-        }
+        # Check if multi-format export is enabled
+        if request.features.multi_format:
+            print(f"🎬 [{video_id}] Multi-format mode enabled - generating 3 formats")
+            background_tasks.add_task(render_multi_format, html_content, video_id, request.fps)
+            return {
+                "message": "Multi-format video generation started",
+                "status": "processing",
+                "video_id": video_id,
+                "record_id": request.record_id,
+                "url": request.url,
+                "multi_format": True,
+                "formats": ["reel", "square", "landscape"],
+                "format_ids": {
+                    "reel": f"{video_id}_reel",
+                    "square": f"{video_id}_square",
+                    "landscape": f"{video_id}_landscape"
+                },
+                "features": request.features.model_dump()
+            }
+        else:
+            background_tasks.add_task(render_video_from_html, html_content, video_id, request.format, request.fps)
+            return {
+                "message": "Video generation started",
+                "status": "processing",
+                "video_id": video_id,
+                "record_id": request.record_id,
+                "url": request.url,
+                "format": request.format,
+                "features": request.features.model_dump()
+            }
     except Exception as e:
         video_jobs[video_id] = {"status": "error", "error": str(e)}
         raise HTTPException(status_code=500, detail=str(e))
