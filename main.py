@@ -1106,10 +1106,12 @@ body {{ background: #0a0a0a; }}
 }}
 .product-img {{ width: 950px; height: auto; max-height: 1200px; object-fit: contain; filter: drop-shadow(0 30px 60px rgba(0,0,0,0.5)) drop-shadow(0 0 100px rgba({primary_rgb[0]},{primary_rgb[1]},{primary_rgb[2]},0.3)); }}
 
-/* LIFESTYLE TREATMENT - Full bleed, edge to edge */
-.frame.lifestyle {{ padding: 0 !important; }}
-.lifestyle-img {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transform: scale(1.05); }}
-.lifestyle-overlay {{ position: absolute; bottom: 0; left: 0; width: 100%; height: 60%; background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.6) 40%, transparent 100%); z-index: 1; }}
+/* LIFESTYLE TREATMENT - Full bleed, edge to edge, NO ANIMATION */
+.frame.lifestyle {{ padding: 0 !important; background: #000; }}
+.frame.lifestyle .bg-glow {{ display: none; }}  /* Hide animated glow for lifestyle */
+.lifestyle-img {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 1; z-index: 0; }}
+.frame.active .lifestyle-img {{ animation: none; opacity: 1; }}  /* NO animation, just static */
+.lifestyle-overlay {{ position: absolute; bottom: 0; left: 0; width: 100%; height: 50%; background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.4) 50%, transparent 100%); z-index: 1; }}
 
 /* AI BACKGROUND TREATMENT - Cinematic atmosphere */
 .ai-bg {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.6; z-index: 0; }}
@@ -1481,36 +1483,37 @@ Return ONLY complete HTML. No explanations."""
             "",
             "🚨🚨🚨 FASHION/LIFESTYLE MODE - STRICT RULES 🚨🚨🚨",
             "",
-            "YOU MUST FOLLOW THESE RULES EXACTLY:",
+            "MANDATORY RULES - FOLLOW EXACTLY:",
             "",
-            "1. ONE IMAGE PER FRAME - Never combine multiple images in one frame",
-            "2. FULL-BLEED IMAGES - Each image fills the ENTIRE 1080x1920 frame edge-to-edge",
-            "3. USE .lifestyle-img CLASS - This makes images cover the full frame",
-            "4. NO PRODUCT CUTOUTS - Do NOT use .product-wrap or floating products",
-            "5. NO AI BACKGROUNDS - Use the original image AS the background",
-            "6. MINIMAL TEXT - One short headline per frame, at the bottom only",
-            "7. NO OVERLAPPING TEXT - Only one text element visible at a time",
-            "8. NO TRUST BADGES - Skip trust badges for fashion (keep it clean)",
-            "9. NO PRICE BADGES ON IMAGES - Only on CTA frame if needed",
+            "1. DIFFERENT IMAGE ON EACH FRAME - Use a different image URL for each frame",
+            "2. FULL-BLEED IMAGES - Image fills ENTIRE 1080x1920, edge-to-edge",
+            "3. ONLY .lifestyle-img CLASS - No .product-wrap, no .product-img",
+            "4. NO BACKGROUNDS - No .bg-glow, no .ai-bg, no extra images behind",
+            "5. ONE HEADLINE PER FRAME - Never stack multiple headlines",
+            "6. SHOP NOW BUTTON ONLY ON FINAL FRAME - Not on other frames",
+            "7. NO TRUST BADGES - Skip entirely for fashion",
+            "8. NO ANIMATIONS on images - Keep them static",
             "",
-            "CORRECT FRAME STRUCTURE:",
+            "FRAME STRUCTURE (copy exactly):",
             '<div class="frame lifestyle active">',
-            '  <img src="IMAGE_URL" class="lifestyle-img">',
+            '  <img src="[UNIQUE_IMAGE_URL]" class="lifestyle-img">',
             '  <div class="lifestyle-overlay"></div>',
-            '  <div class="text-area">',
-            '    <h1>Simple <span class="text-gradient">Headline</span></h1>',
-            '  </div>',
+            '  <div class="text-area"><h1>One Headline</h1></div>',
             '</div>',
             "",
-            "WRONG (DO NOT DO THIS):",
-            "- Multiple small images composited together",
-            "- Images floating on generated backgrounds",
-            "- Multiple headlines overlapping",
-            "- .product-wrap with small centered images",
-            "- Trust badges floating in middle of frame",
-            "- Cluttered frames with too many elements",
+            "FRAME 1: First image + intro headline",
+            "FRAME 2: Second image + feature headline",
+            "FRAME 3: Third image + benefit headline",
+            "FRAME 4 (FINAL): Fourth image + CTA button ONLY here",
             "",
-            "KEEP IT SIMPLE: Big beautiful image + minimal text = fashion editorial style",
+            "FORBIDDEN:",
+            "- .bg-glow element",
+            "- .ai-bg element",
+            "- .product-wrap element",
+            "- Multiple headlines in one frame",
+            "- Same image on multiple frames",
+            "- SHOP NOW on non-final frames",
+            "- Any background behind the lifestyle image",
         ])
     else:
         user_prompt_parts.extend([
@@ -1525,10 +1528,11 @@ Return ONLY complete HTML. No explanations."""
 
     if is_lifestyle_product:
         user_prompt_parts.extend([
-            "1. ONE image per frame, FULL-BLEED using .lifestyle-img class",
-            "2. MINIMAL design - just image + one headline + overlay",
-            "3. NO badges, NO extra elements, NO clutter",
-            "4. Fashion editorial style = clean and simple",
+            "1. DIFFERENT image on each frame - cycle through provided images",
+            "2. FULL-BLEED using .lifestyle-img - image IS the background",
+            "3. ONE headline per frame - no stacking text",
+            "4. CTA button ONLY on final frame",
+            "5. NO .bg-glow, NO .ai-bg, NO backgrounds behind image",
         ])
     else:
         user_prompt_parts.extend([
