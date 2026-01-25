@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+
+# Generated files
+frames/
+videos/
+bg_removed/
+ai_backgrounds/
+temp_*.html
+
+# IDE
+.vscode/
+.idea/
+
+# Environment
+.env
+.env.local
