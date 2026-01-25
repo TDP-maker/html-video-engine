@@ -78,6 +78,7 @@ class VideoFeatures(BaseModel):
     video_style: str = "editorial"       # editorial, dynamic, product_focus, lifestyle
     mood: str = "luxury"                 # luxury, playful, bold, minimal
     pacing: str = "balanced"             # slow, balanced, fast
+    transition: str = "fade"             # fade, slide, zoom, blur, wipe
     # AI Copywriting - let AI create compelling copy instead of using stale page text
     ai_copywriting: bool = True          # Generate marketing headlines (default ON)
     # Custom copy overrides (user can edit these after preview)
@@ -103,6 +104,7 @@ class PreviewRequest(BaseModel):
     video_style: str = "editorial"       # editorial, dynamic, product_focus, lifestyle
     mood: str = "luxury"                 # luxury, playful, bold, minimal
     pacing: str = "balanced"             # slow, balanced, fast
+    transition: str = "fade"             # fade, slide, zoom, blur, wipe
     font_family: str = "Inter"
     text_color: str = "#ffffff"
     accent_color: str = ""
@@ -1402,7 +1404,8 @@ body {{ background: #0a0a0a; }}
 @keyframes bgPulse {{ 0%, 100% {{ transform: scale(1); opacity: 0.6; }} 50% {{ transform: scale(1.05); opacity: 0.7; }} }}
 
 /* PREMIUM TEXT STYLING - 15% from bottom (288px), above Instagram UI */
-.text-area {{ position: absolute; bottom: 300px; left: 0; text-align: center; width: 100%; padding: 0 120px; padding-right: 200px; transform: translateY(30px); z-index: 10; }}
+/* Centered with slight left offset to account for Instagram right-side buttons */
+.text-area {{ position: absolute; bottom: 300px; left: 50%; transform: translateX(-55%) translateY(30px); text-align: center; width: 80%; max-width: 900px; z-index: 10; }}
 h1 {{
   font-family: '{font_family}', sans-serif; font-size: 72px; font-weight: 900;
   color: {text_color}; text-transform: uppercase; line-height: 1.1; letter-spacing: -1px;
