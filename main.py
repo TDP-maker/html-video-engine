@@ -5,7 +5,7 @@ import subprocess
 import imageio_ffmpeg
 import httpx
 from fastapi import FastAPI, BackgroundTasks, HTTPException, Header, Depends
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 from playwright.async_api import async_playwright
@@ -316,6 +316,12 @@ async def generate_html_from_url(url: str, prompt: str = "") -> str:
 
     system_prompt = """You are a premium video ad designer. Create cinematic Instagram Reel HTML videos.
 
+⚠️ INSTAGRAM SAFE ZONES - CRITICAL:
+- TOP 250px: Username/follow button overlay - NO important content
+- BOTTOM 400px: Captions/music/buttons overlay - NO important text here
+- RIGHT 150px: Like/comment/share buttons - keep content left of this
+- SAFE AREA: Content should be within x:0-930px, y:250-1520px
+
 MANDATORY STRUCTURE (copy this exactly):
 ```
 <style>
@@ -339,10 +345,13 @@ body { background: #0a0a0a; }
   50% { transform: translate(30px, -30px) scale(1.1); }
 }
 
-/* FRAME TRANSITIONS */
-.frame { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 180px; transition: opacity 0.6s ease-in-out; }
+/* FRAME TRANSITIONS - Respects Instagram safe zones */
+.frame { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 280px; padding-right: 80px; transition: opacity 0.6s ease-in-out; }
 .frame.active { opacity: 1; }
 .frame.exit { opacity: 0; }
+
+/* Safe zone helper - content container */
+.safe-zone { position: absolute; top: 250px; left: 60px; right: 170px; bottom: 420px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 
 /* PRODUCT ANIMATIONS */
 .frame.active .product-wrap { animation: floatIn 1s cubic-bezier(0.34, 1.56, 0.64, 1) forwards, float 4s ease-in-out 1s infinite; }
@@ -358,17 +367,19 @@ body { background: #0a0a0a; }
   background: radial-gradient(ellipse at center, rgba(255,255,255,0.95) 0%, rgba(240,240,240,0.7) 30%, rgba(150,150,150,0.2) 50%, transparent 70%);
   z-index: -1; border-radius: 50%;
 }
-.product-img { width: 900px; height: auto; max-height: 1000px; object-fit: contain; filter: drop-shadow(0 50px 100px rgba(0,0,0,0.6)); }
+.product-img { width: 850px; height: auto; max-height: 850px; object-fit: contain; filter: drop-shadow(0 50px 100px rgba(0,0,0,0.6)); }
 
-/* LIFESTYLE TREATMENT */
-.frame.lifestyle { padding-top: 0; }
-.lifestyle-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transform: scale(1.08); }
-.lifestyle-overlay { position: absolute; bottom: 0; left: 0; width: 100%; height: 60%; background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.5) 50%, transparent 100%); z-index: 1; }
+/* LIFESTYLE TREATMENT - Full bleed, edge to edge */
+.frame.lifestyle { padding: 0 !important; }
+.lifestyle-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transform: scale(1.05); }
+.lifestyle-overlay { position: absolute; bottom: 0; left: 0; width: 100%; height: 70%; background: linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.7) 40%, transparent 100%); z-index: 1; }
+/* Text on lifestyle frames still respects safe zones */
+.frame.lifestyle .text-area { bottom: 450px; padding-right: 180px; }
 
-/* PREMIUM TEXT STYLING */
-.text-area { position: absolute; bottom: 140px; text-align: center; width: 100%; padding: 0 80px; transform: translateY(30px); z-index: 10; }
+/* PREMIUM TEXT STYLING - Above Instagram's bottom UI (420px from bottom) */
+.text-area { position: absolute; bottom: 450px; text-align: center; width: 100%; padding: 0 100px; padding-right: 180px; transform: translateY(30px); z-index: 10; }
 h1 {
-  font-family: 'Inter', sans-serif; font-size: 88px; font-weight: 900;
+  font-family: 'Inter', sans-serif; font-size: 80px; font-weight: 900;
   color: white; text-transform: uppercase; line-height: 1.05; letter-spacing: -2px;
   text-shadow: 0 4px 30px rgba(0,0,0,0.5);
 }
@@ -377,7 +388,7 @@ h1 {
   -webkit-background-clip: text; -webkit-text-fill-color: transparent;
   background-clip: text;
 }
-p { font-family: 'Inter', sans-serif; font-size: 40px; font-weight: 400; color: rgba(255,255,255,0.7); margin-top: 24px; letter-spacing: 1px; }
+p { font-family: 'Inter', sans-serif; font-size: 36px; font-weight: 400; color: rgba(255,255,255,0.7); margin-top: 20px; letter-spacing: 1px; }
 
 /* ACCENT ELEMENTS */
 .accent-line { width: 0; height: 4px; background: linear-gradient(90deg, #6366f1, #ec4899); margin: 30px auto 0; border-radius: 2px; }
@@ -418,17 +429,35 @@ PREMIUM ELEMENTS TO INCLUDE:
 
 IMAGE TREATMENT - CHOOSE BASED ON IMAGE TYPE:
 
-**PRODUCT treatment** (isolated shots):
+**PRODUCT treatment** (isolated shots on white/plain bg):
+- Product image stays INSIDE safe zone (max 850px)
+- Text stays INSIDE safe zone (450px from bottom, 180px from right)
 <div class="product-wrap"><img src="URL" class="product-img"></div>
 
-**LIFESTYLE treatment** (contextual/environmental):
+**LIFESTYLE treatment** (contextual/environmental/hero shots):
+- Image goes FULL BLEED - covers entire 1080x1920, edge to edge, NO gaps
+- Text overlay MUST still be in safe zone (use text-area class)
+- Gradient overlay protects text readability
 <div class="frame lifestyle active"><img src="URL" class="lifestyle-img"><div class="lifestyle-overlay"></div><div class="text-area">...</div></div>
+
+KEY DIFFERENCE:
+- Lifestyle IMAGES = full frame, no gaps, bleeds to all edges
+- Lifestyle TEXT = still in safe zone, not covered by Instagram UI
+- Product IMAGES = contained in safe zone with gradient bg
+- Product TEXT = in safe zone
 
 FRAME STRUCTURE:
 1. HERO: Impactful opening - lifestyle OR dramatic product reveal
 2. FEATURE: Product detail + benefit (use accent-line)
 3. VALUE: Social proof or key differentiator
 4. CTA: Strong call-to-action with product
+
+⚠️ INSTAGRAM SAFE ZONE RULES:
+- Text must be at bottom: 450px minimum (text-area class handles this)
+- Product images: max 850px tall to fit in safe zone
+- Keep right side clear: use padding-right on text (180px)
+- Top 280px is padding for profile UI
+- NEVER put important text in bottom 400px or right 150px
 
 Add at end: <script>const timing = [3500, 3500, 3500, 3500, 3500];</script>
 
@@ -465,20 +494,137 @@ Remember: Image ABOVE (900px wide, centered), text BELOW in text-area div. Dark 
 
 # --- API ENDPOINTS ---
 
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 async def home():
-    return {
-        "status": "Online",
-        "message": "HTML Video Engine",
-        "endpoints": {
-            "/generate": "POST - Template video",
-            "/generate-html": "POST - Video from custom HTML",
-            "/generate-from-url": "POST - AI generates video from URL",
-            "/status/{video_id}": "GET - Check video status",
-            "/download/{video_id}": "GET - Download specific video",
-            "/download": "GET - Download latest video"
+    return """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Engine</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', -apple-system, sans-serif; background: #0a0a0a; color: white; min-height: 100vh; padding: 60px 20px; }
+        .container { max-width: 600px; margin: 0 auto; }
+        h1 { font-size: 32px; font-weight: 700; margin-bottom: 8px; }
+        .subtitle { color: #888; margin-bottom: 40px; }
+        label { display: block; font-size: 14px; color: #888; margin-bottom: 8px; }
+        input { width: 100%; padding: 16px; font-size: 16px; border: 1px solid #333; border-radius: 8px; background: #111; color: white; margin-bottom: 20px; }
+        input:focus { outline: none; border-color: #6366f1; }
+        button { width: 100%; padding: 16px; font-size: 16px; font-weight: 600; border: none; border-radius: 8px; background: linear-gradient(135deg, #6366f1, #ec4899); color: white; cursor: pointer; transition: transform 0.2s, opacity 0.2s; }
+        button:hover { transform: translateY(-2px); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .status { margin-top: 30px; padding: 20px; border-radius: 8px; background: #111; border: 1px solid #222; }
+        .status.hidden { display: none; }
+        .progress-bar { height: 4px; background: #333; border-radius: 2px; margin: 15px 0; overflow: hidden; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, #6366f1, #ec4899); width: 0%; transition: width 0.3s; }
+        .download-btn { display: inline-block; margin-top: 15px; padding: 12px 24px; background: #22c55e; border-radius: 6px; color: white; text-decoration: none; font-weight: 600; }
+        .download-btn:hover { background: #16a34a; }
+        .error { color: #ef4444; }
+        .api-info { margin-top: 60px; padding-top: 30px; border-top: 1px solid #222; }
+        .api-info h3 { font-size: 16px; margin-bottom: 15px; }
+        code { background: #1a1a1a; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Video Engine</h1>
+        <p class="subtitle">Generate premium product videos from any URL</p>
+
+        <form id="generateForm">
+            <label>Product URL</label>
+            <input type="url" id="urlInput" placeholder="https://www.nike.com/t/air-max-90-mens-shoes" required>
+
+            <label>Custom Instructions (optional)</label>
+            <input type="text" id="promptInput" placeholder="Focus on comfort features...">
+
+            <button type="submit" id="submitBtn">Generate Video</button>
+        </form>
+
+        <div id="status" class="status hidden">
+            <div id="statusText">Starting...</div>
+            <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+            <div id="downloadArea"></div>
+        </div>
+
+        <div class="api-info">
+            <h3>API Endpoints</h3>
+            <p><code>POST /generate-from-url</code> - Generate video from URL</p>
+            <p><code>GET /status/{video_id}</code> - Check progress</p>
+            <p><code>GET /download/{video_id}</code> - Download video</p>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('generateForm');
+        const statusDiv = document.getElementById('status');
+        const statusText = document.getElementById('statusText');
+        const progressFill = document.getElementById('progressFill');
+        const downloadArea = document.getElementById('downloadArea');
+        const submitBtn = document.getElementById('submitBtn');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const url = document.getElementById('urlInput').value;
+            const prompt = document.getElementById('promptInput').value;
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Generating...';
+            statusDiv.classList.remove('hidden');
+            statusText.textContent = 'Starting video generation...';
+            progressFill.style.width = '0%';
+            downloadArea.innerHTML = '';
+
+            try {
+                const res = await fetch('/generate-from-url', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url, prompt })
+                });
+                const data = await res.json();
+
+                if (data.video_id) {
+                    pollStatus(data.video_id);
+                } else {
+                    throw new Error(data.detail || 'Failed to start');
+                }
+            } catch (err) {
+                statusText.innerHTML = '<span class="error">Error: ' + err.message + '</span>';
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Generate Video';
+            }
+        });
+
+        async function pollStatus(videoId) {
+            try {
+                const res = await fetch('/status/' + videoId);
+                const data = await res.json();
+
+                progressFill.style.width = data.progress + '%';
+
+                if (data.status === 'complete') {
+                    statusText.textContent = 'Video ready!';
+                    progressFill.style.width = '100%';
+                    downloadArea.innerHTML = '<a href="/download/' + videoId + '" class="download-btn" download>Download Video</a>';
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Generate Another';
+                } else if (data.status === 'error') {
+                    statusText.innerHTML = '<span class="error">Error: ' + data.error + '</span>';
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Try Again';
+                } else {
+                    statusText.textContent = 'Generating... ' + data.status + ' (' + data.progress + '%)';
+                    setTimeout(() => pollStatus(videoId), 1500);
+                }
+            } catch (err) {
+                setTimeout(() => pollStatus(videoId), 2000);
+            }
         }
-    }
+    </script>
+</body>
+</html>
+"""
 
 @app.post("/generate")
 async def generate(brief: VideoBrief, background_tasks: BackgroundTasks, _: bool = Depends(verify_api_key)):
