@@ -358,12 +358,13 @@ body { background: #0a0a0a; }
 }
 
 /* FRAME TRANSITIONS - Respects Instagram safe zones */
-.frame { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 280px; padding-right: 80px; transition: opacity 1s ease-in-out; }
+.frame { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 250px 80px 400px 80px; transition: opacity 1s ease-in-out; }
 .frame.active { opacity: 1; transition: opacity 1s ease-in-out; }
 .frame.exit { opacity: 0; transition: opacity 1s ease-in-out; }
 
-/* Safe zone helper - content container */
-.safe-zone { position: absolute; top: 250px; left: 60px; right: 170px; bottom: 420px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+/* Safe zone helper - balanced vertical distribution */
+.safe-zone { position: absolute; top: 200px; left: 80px; right: 180px; bottom: 350px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; }
+.content-area { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; }
 
 /* PRODUCT ANIMATIONS */
 .frame.active .product-wrap { animation: floatIn 1s cubic-bezier(0.34, 1.56, 0.64, 1) forwards, float 4s ease-in-out 1s infinite; }
@@ -371,26 +372,26 @@ body { background: #0a0a0a; }
 .frame.active .lifestyle-img { animation: zoomIn 1.2s ease-out forwards; }
 .frame.active .accent-line { animation: lineGrow 0.6s ease-out 0.6s forwards; }
 
-/* PRODUCT TREATMENT */
-.product-wrap { position: relative; transform: scale(0.85) translateY(40px); opacity: 0; z-index: 1; }
+/* PRODUCT TREATMENT - Centered in safe zone */
+.product-wrap { position: relative; transform: scale(0.85) translateY(40px); opacity: 0; z-index: 1; margin-bottom: 60px; }
 .product-wrap::before {
   content: ''; position: absolute; top: 50%; left: 50%;
   transform: translate(-50%, -50%); width: 140%; height: 140%;
   background: radial-gradient(ellipse at center, rgba(255,255,255,0.95) 0%, rgba(240,240,240,0.7) 30%, rgba(150,150,150,0.2) 50%, transparent 70%);
   z-index: -1; border-radius: 50%;
 }
-.product-img { width: 850px; height: auto; max-height: 850px; object-fit: contain; filter: drop-shadow(0 50px 100px rgba(0,0,0,0.6)); }
+.product-img { width: 800px; height: auto; max-height: 750px; object-fit: contain; filter: drop-shadow(0 50px 100px rgba(0,0,0,0.6)); }
 
 /* LIFESTYLE TREATMENT */
 .frame.lifestyle { padding-top: 0; padding-right: 0; }
 .lifestyle-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transform: scale(1.08); }
 .lifestyle-overlay { position: absolute; bottom: 0; left: 0; width: 100%; height: 70%; background: linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.7) 40%, transparent 100%); z-index: 1; }
 
-/* PREMIUM TEXT STYLING - Above Instagram's bottom UI (420px from bottom) */
-.text-area { position: absolute; bottom: 450px; text-align: center; width: 100%; padding: 0 100px; padding-right: 180px; transform: translateY(30px); z-index: 10; }
+/* PREMIUM TEXT STYLING - 15% from bottom (288px), above Instagram UI */
+.text-area { position: absolute; bottom: 300px; left: 0; text-align: center; width: 100%; padding: 0 120px; padding-right: 200px; transform: translateY(30px); z-index: 10; }
 h1 {
-  font-family: 'Inter', sans-serif; font-size: 80px; font-weight: 900;
-  color: white; text-transform: uppercase; line-height: 1.05; letter-spacing: -2px;
+  font-family: 'Inter', sans-serif; font-size: 72px; font-weight: 900;
+  color: white; text-transform: uppercase; line-height: 1.1; letter-spacing: -1px;
   text-shadow: 0 4px 30px rgba(0,0,0,0.5);
 }
 .text-gradient {
@@ -398,7 +399,7 @@ h1 {
   -webkit-background-clip: text; -webkit-text-fill-color: transparent;
   background-clip: text;
 }
-p { font-family: 'Inter', sans-serif; font-size: 36px; font-weight: 400; color: rgba(255,255,255,0.7); margin-top: 20px; letter-spacing: 1px; }
+p { font-family: 'Inter', sans-serif; font-size: 32px; font-weight: 400; color: rgba(255,255,255,0.7); margin-top: 16px; letter-spacing: 1px; }
 
 /* ACCENT ELEMENTS */
 .accent-line { width: 0; height: 4px; background: linear-gradient(90deg, #6366f1, #ec4899); margin: 30px auto 0; border-radius: 2px; }
@@ -452,11 +453,17 @@ FRAME STRUCTURE:
 4. CTA: Strong call-to-action with product
 
 ⚠️ INSTAGRAM SAFE ZONE RULES:
-- Text must be at bottom: 450px minimum (text-area class handles this)
-- Product images: max 850px tall to fit in safe zone
-- Keep right side clear: use padding-right on text (180px)
-- Top 280px is padding for profile UI
-- NEVER put important text in bottom 400px or right 150px
+- Text at 15% from bottom (300px) - text-area class handles this
+- Product images: max 750px tall, centered vertically in safe zone
+- Keep right side clear: 200px padding on right for buttons
+- Top 200px reserved for profile UI
+- NEVER put important content in bottom 300px or right 180px
+
+COMPOSITION BALANCE:
+- Product should be vertically centered with breathing room
+- Text below product with comfortable spacing (60px gap)
+- Don't squash elements together - use the full safe zone height
+- Distribute content evenly: product in upper area, text in lower area
 
 Add at end: <script>const timing = [3500, 3500, 3500, 3500, 3500];</script>
 
