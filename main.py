@@ -308,9 +308,11 @@ body { background: #0a0a0a; }
 .reel-container { width: 1080px; height: 1920px; position: relative; overflow: hidden; background: #0a0a0a; }
 .frame { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 200px; transition: opacity 0.5s ease-out; }
 .frame.active { opacity: 1; }
-.frame.active .product-img { animation: floatIn 0.8s ease-out forwards, float 3s ease-in-out 0.8s infinite; }
+.frame.active .product-wrap { animation: floatIn 0.8s ease-out forwards, float 3s ease-in-out 0.8s infinite; }
 .frame.active .text-area { animation: fadeUp 0.6s ease-out 0.3s forwards; opacity: 0; }
-.product-img { width: 900px; height: auto; max-height: 1100px; object-fit: contain; filter: drop-shadow(0 40px 80px rgba(0,0,0,0.5)); transform: scale(0.9) translateY(30px); opacity: 0; }
+.product-wrap { position: relative; transform: scale(0.9) translateY(30px); opacity: 0; }
+.product-wrap::before { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 120%; height: 120%; background: radial-gradient(ellipse at center, rgba(240,240,240,0.9) 0%, rgba(200,200,200,0.5) 40%, rgba(10,10,10,0) 70%); z-index: -1; border-radius: 50%; }
+.product-img { width: 900px; height: auto; max-height: 1100px; object-fit: contain; filter: drop-shadow(0 40px 80px rgba(0,0,0,0.5)); }
 .text-area { position: absolute; bottom: 150px; text-align: center; width: 100%; padding: 0 60px; transform: translateY(20px); }
 h1 { font-family: 'Inter', sans-serif; font-size: 90px; font-weight: 900; color: white; text-transform: uppercase; line-height: 1.1; }
 p { font-family: 'Inter', sans-serif; font-size: 42px; font-weight: 700; color: #888; margin-top: 20px; }
@@ -331,12 +333,12 @@ p { font-family: 'Inter', sans-serif; font-size: 42px; font-weight: 700; color: 
 ```
 
 CRITICAL RULES:
-1. Product image: ALWAYS use class="product-img" with width: 900px
+1. Product image: Wrap in <div class="product-wrap"><img src="URL" class="product-img"></div>
 2. Text: ALWAYS in div class="text-area" at bottom, NEVER beside the image
 3. Layout: Image on top (centered), text below - VERTICAL STACKING ONLY
-4. Background: Dark solid color (#0a0a0a) - NO white backgrounds or boxes around images
+4. Background: Dark solid color (#0a0a0a) - the product-wrap creates a gradient fade
 5. Each frame: flex-direction: column to stack image above text
-6. Images load from URLs - just use <img src="URL" class="product-img">
+6. The product-wrap::before creates a radial gradient that blends product bg to dark
 7. Animations are automatic via .frame.active CSS - no extra JS needed
 
 FRAME CONTENT (5-6 frames):
