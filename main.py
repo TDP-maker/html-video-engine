@@ -2,6 +2,7 @@ import os
 import uuid
 import asyncio
 import subprocess
+import json
 import imageio_ffmpeg
 import httpx
 import base64
@@ -77,6 +78,13 @@ class VideoFeatures(BaseModel):
     video_style: str = "editorial"       # editorial, dynamic, product_focus, lifestyle
     mood: str = "luxury"                 # luxury, playful, bold, minimal
     pacing: str = "balanced"             # slow, balanced, fast
+    # AI Copywriting - let AI create compelling copy instead of using stale page text
+    ai_copywriting: bool = True          # Generate marketing headlines (default ON)
+    # Custom copy overrides (user can edit these after preview)
+    custom_headline: str = ""            # Override main headline
+    custom_subheadline: str = ""         # Override subheadline
+    custom_cta_text: str = ""            # Override CTA button text
+    custom_tagline: str = ""             # Override tagline/benefit line
 
 class URLVideoRequest(BaseModel):
     """Generate video from URL + prompt"""
@@ -98,6 +106,11 @@ class PreviewRequest(BaseModel):
     font_family: str = "Inter"
     text_color: str = "#ffffff"
     accent_color: str = ""
+    # Copy customization (user editable)
+    custom_headline: str = ""            # Override main headline
+    custom_subheadline: str = ""         # Override subheadline
+    custom_cta_text: str = ""            # Override CTA button text
+    custom_tagline: str = ""             # Override tagline/benefit line
 
 # --- FORMAT CONFIGURATIONS ---
 FORMAT_DIMENSIONS = {
@@ -420,20 +433,41 @@ async def extract_images_with_playwright(url: str) -> tuple[list, str, str, dict
                     }
                 }
 
-                // All headings
+                // All headings - but filter out UI/navigation junk
+                const junkPatterns = [
+                    'filter', 'sort', 'menu', 'nav', 'search', 'cart', 'login', 'sign in',
+                    'account', 'wishlist', 'compare', 'category', 'categories', 'browse',
+                    'shop all', 'view all', 'see all', 'show all', 'load more', 'back to',
+                    'cookie', 'privacy', 'subscribe', 'newsletter', 'footer', 'header',
+                    'sidebar', 'related', 'you may also', 'recently viewed', 'customers also',
+                    'shipping', 'returns', 'help', 'contact', 'faq', 'about us', 'terms',
+                    'select size', 'select color', 'choose', 'options', 'quantity', 'qty'
+                ];
                 document.querySelectorAll('h1, h2, h3').forEach(h => {
                     const text = h.textContent.trim();
-                    if (text && text.length > 3 && text.length < 150) {
-                        result.headings.push(text);
+                    const textLower = text.toLowerCase();
+                    // Skip if too short, too long, or matches junk patterns
+                    if (text && text.length > 5 && text.length < 150) {
+                        const isJunk = junkPatterns.some(pattern => textLower.includes(pattern));
+                        if (!isJunk) {
+                            result.headings.push(text);
+                        }
                     }
                 });
                 result.headings = result.headings.slice(0, 10);
 
-                // Key paragraphs (first few meaningful ones)
+                // Key paragraphs - filter out UI/legal/navigation text
                 document.querySelectorAll('p').forEach(p => {
                     const text = p.textContent.trim();
+                    const textLower = text.toLowerCase();
                     if (text && text.length > 30 && text.length < 300) {
-                        result.paragraphs.push(text);
+                        const isJunk = junkPatterns.some(pattern => textLower.includes(pattern));
+                        // Also skip paragraphs that look like legal/policy text
+                        const isLegal = textLower.includes('©') || textLower.includes('all rights') ||
+                                       textLower.includes('policy') || textLower.includes('terms of');
+                        if (!isJunk && !isLegal) {
+                            result.paragraphs.push(text);
+                        }
                     }
                 });
                 result.paragraphs = result.paragraphs.slice(0, 5);
@@ -490,6 +524,91 @@ async def extract_images_with_playwright(url: str) -> tuple[list, str, str, dict
         print(f"⚠️ Playwright extraction error: {e}")
 
     return product_images, page_title, page_description, extracted_copy
+
+
+async def generate_ai_copy(product_name: str, brand: str, price: str, description: str,
+                           category: str, mood: str = "luxury") -> dict:
+    """
+    Use GPT to generate compelling marketing copy for the video.
+    Returns headlines, taglines, and CTA text optimized for video ads.
+    Cost: ~$0.01 (very small prompt)
+    """
+    client = OpenAI()
+
+    # Build context from available info
+    context_parts = []
+    if product_name:
+        context_parts.append(f"Product: {product_name}")
+    if brand:
+        context_parts.append(f"Brand: {brand}")
+    if price:
+        context_parts.append(f"Price: {price}")
+    if description:
+        context_parts.append(f"Description: {description[:200]}")
+    if category:
+        context_parts.append(f"Category: {category}")
+
+    context = "\n".join(context_parts) if context_parts else "Generic product"
+
+    mood_guidance = {
+        "luxury": "elegant, sophisticated, aspirational",
+        "playful": "fun, energetic, friendly",
+        "bold": "confident, striking, powerful",
+        "minimal": "clean, simple, understated"
+    }
+    tone = mood_guidance.get(mood, "elegant, sophisticated")
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",  # Use mini for cost efficiency (~$0.005)
+            messages=[
+                {"role": "system", "content": f"""You are a premium video ad copywriter. Create short, punchy marketing copy.
+Tone: {tone}
+Rules:
+- Headlines: 2-5 words max, impactful
+- Taglines: 5-8 words, benefit-focused
+- CTA: 2-3 words, action-oriented
+- NO generic filler like "Shop Now" for headlines
+- Make it feel premium and scroll-stopping"""},
+                {"role": "user", "content": f"""Create video ad copy for:
+{context}
+
+Return JSON with:
+- headline: Main attention-grabbing headline (2-5 words)
+- subheadline: Secondary hook or feature (3-6 words)
+- tagline: Benefit statement (5-8 words)
+- cta_text: Call to action button text (2-3 words)
+- frame_headlines: Array of 4 short headlines for each video frame
+
+Return ONLY valid JSON, no explanation."""}
+            ],
+            max_tokens=300
+        )
+
+        content = response.choices[0].message.content.strip()
+        # Clean up JSON if wrapped in markdown
+        content = re.sub(r'^```json?\n?', '', content)
+        content = re.sub(r'\n?```$', '', content)
+
+        copy_data = json.loads(content)
+        print(f"✨ AI Copy generated: {copy_data.get('headline', 'N/A')}")
+        return copy_data
+
+    except Exception as e:
+        print(f"⚠️ AI Copy generation failed: {e}")
+        # Return sensible defaults
+        return {
+            "headline": product_name[:30] if product_name else "Discover More",
+            "subheadline": "Elevate Your Style",
+            "tagline": "Premium quality you can feel",
+            "cta_text": "Shop Now",
+            "frame_headlines": [
+                product_name[:25] if product_name else "New Arrival",
+                "Crafted for You",
+                "Feel the Difference",
+                "Get Yours Today"
+            ]
+        }
 
 
 async def remove_background(image_url: str) -> str:
@@ -955,8 +1074,20 @@ async def extract_colors_from_image(image_url: str) -> dict:
         return None
 
 
-async def generate_html_from_url(url: str, prompt: str = "", features: VideoFeatures = None) -> str:
-    """Use Playwright + OpenAI to generate HTML video content from a URL"""
+async def generate_html_from_url(url: str, prompt: str = "", features: VideoFeatures = None, return_copy_data: bool = False):
+    """
+    Use Playwright + OpenAI to generate HTML video content from a URL.
+
+    Args:
+        url: Product page URL
+        prompt: Additional instructions
+        features: VideoFeatures configuration
+        return_copy_data: If True, returns (html, copy_data) tuple for preview editing
+
+    Returns:
+        str (HTML) if return_copy_data=False
+        tuple (html, copy_data) if return_copy_data=True
+    """
 
     # Use default features if none provided
     if features is None:
@@ -1004,6 +1135,28 @@ async def generate_html_from_url(url: str, prompt: str = "", features: VideoFeat
                 ai_background_url = await generate_ai_background(page_title, product_category, brand_colors)
             except Exception as e:
                 print(f"⚠️ Skipping AI background: {e}")
+
+    # AI Copywriting: Generate compelling marketing copy
+    ai_copy = None
+    if features.ai_copywriting:
+        print(f"✨ Generating AI marketing copy...")
+        ai_copy = await generate_ai_copy(
+            product_name=extracted_copy.get("product_name", ""),
+            brand=extracted_copy.get("brand", ""),
+            price=extracted_copy.get("price", ""),
+            description=extracted_copy.get("description", ""),
+            category=product_category,
+            mood=features.mood
+        )
+
+    # Apply custom copy overrides (user can edit these after preview)
+    final_copy = {
+        "headline": features.custom_headline or (ai_copy.get("headline") if ai_copy else ""),
+        "subheadline": features.custom_subheadline or (ai_copy.get("subheadline") if ai_copy else ""),
+        "tagline": features.custom_tagline or (ai_copy.get("tagline") if ai_copy else ""),
+        "cta_text": features.custom_cta_text or (ai_copy.get("cta_text") if ai_copy else "Shop Now"),
+        "frame_headlines": ai_copy.get("frame_headlines", []) if ai_copy else []
+    }
 
     # Build smart copy constraints from extracted content (if enabled)
     smart_copy = []
@@ -1631,6 +1784,31 @@ Return ONLY complete HTML. No explanations."""
     if color_info:
         user_prompt_parts.append(color_info)
 
+    # Add AI-generated copy if available
+    if final_copy.get("headline") or final_copy.get("frame_headlines"):
+        user_prompt_parts.extend([
+            "",
+            "✨ AI-GENERATED MARKETING COPY (USE THESE EXACT HEADLINES):",
+        ])
+        if final_copy.get("headline"):
+            user_prompt_parts.append(f"   MAIN HEADLINE: {final_copy['headline']}")
+        if final_copy.get("subheadline"):
+            user_prompt_parts.append(f"   SUBHEADLINE: {final_copy['subheadline']}")
+        if final_copy.get("tagline"):
+            user_prompt_parts.append(f"   TAGLINE: {final_copy['tagline']}")
+        if final_copy.get("cta_text"):
+            user_prompt_parts.append(f"   CTA BUTTON TEXT: {final_copy['cta_text']}")
+        if final_copy.get("frame_headlines"):
+            user_prompt_parts.append("   FRAME-BY-FRAME HEADLINES:")
+            for i, headline in enumerate(final_copy["frame_headlines"][:4]):
+                frame_num = i + 1
+                user_prompt_parts.append(f"      Frame {frame_num}: {headline}")
+        user_prompt_parts.extend([
+            "",
+            "⚠️ USE THE HEADLINES ABOVE - They are professionally crafted for this product.",
+            "DO NOT make up your own headlines - use the AI-generated ones provided.",
+        ])
+
     if features.smart_copy and smart_copy_text:
         user_prompt_parts.extend([
             "",
@@ -1738,6 +1916,21 @@ Return ONLY complete HTML. No explanations."""
     html_content = response.choices[0].message.content
     html_content = re.sub(r'^```html?\n?', '', html_content)
     html_content = re.sub(r'\n?```$', '', html_content)
+
+    # Return copy data for preview editing if requested
+    if return_copy_data:
+        copy_data = {
+            "headline": final_copy.get("headline", ""),
+            "subheadline": final_copy.get("subheadline", ""),
+            "tagline": final_copy.get("tagline", ""),
+            "cta_text": final_copy.get("cta_text", "Shop Now"),
+            "frame_headlines": final_copy.get("frame_headlines", []),
+            "product_name": extracted_copy.get("product_name", ""),
+            "price": extracted_copy.get("price", ""),
+            "brand": extracted_copy.get("brand", ""),
+            "category": product_category
+        }
+        return html_content, copy_data
 
     return html_content
 
@@ -2193,13 +2386,17 @@ async def generate_html_video(request: HTMLVideoRequest, background_tasks: Backg
 @app.post("/preview-from-url")
 async def preview_from_url(request: PreviewRequest, _: bool = Depends(verify_api_key)):
     """
-    CHEAP PREVIEW MODE - Returns HTML only, no video rendering.
+    CHEAP PREVIEW MODE - Returns HTML + editable copy, no video rendering.
 
-    Cost: ~$0.02-0.04 (GPT-4o only)
+    Cost: ~$0.03-0.05 (GPT-4o + GPT-4o-mini for copy)
     Skips: DALL-E backgrounds (~$0.04), Remove.bg (~$0.10)
 
-    Use this to let users preview before committing to full video render.
-    Returns HTML that can be displayed in an iframe.
+    Returns:
+    - HTML preview for iframe display
+    - AI-generated marketing copy (editable)
+    - User can edit copy, then call /generate-from-url with custom_* fields
+
+    Use this to let users preview and customize before full video render.
     """
     preview_id = str(uuid.uuid4())[:8]
 
@@ -2220,27 +2417,37 @@ async def preview_from_url(request: PreviewRequest, _: bool = Depends(verify_api
             price_badge=True,
             trust_badges=True,
             multi_format=False,
+            ai_copywriting=True,           # Generate AI marketing copy
             # User's creative direction choices
             font_family=request.font_family,
             text_color=request.text_color,
             accent_color=request.accent_color,
             video_style=request.video_style,
             mood=request.mood,
-            pacing=request.pacing
+            pacing=request.pacing,
+            # Pass any custom copy overrides
+            custom_headline=request.custom_headline,
+            custom_subheadline=request.custom_subheadline,
+            custom_cta_text=request.custom_cta_text,
+            custom_tagline=request.custom_tagline
         )
 
-        # Generate HTML (only costs ~$0.02-0.04 for GPT-4o)
-        html_content = await generate_html_from_url(request.url, request.prompt, preview_features)
+        # Generate HTML with copy data for editing
+        html_content, copy_data = await generate_html_from_url(
+            request.url, request.prompt, preview_features, return_copy_data=True
+        )
         print(f"✅ [{preview_id}] Preview HTML generated ({len(html_content)} chars)")
+        print(f"✨ [{preview_id}] AI Copy: {copy_data.get('headline', 'N/A')}")
 
         # Store preview for retrieval
         video_jobs[preview_id] = {
             "status": "preview_complete",
             "html": html_content,
-            "url": request.url
+            "url": request.url,
+            "copy_data": copy_data
         }
 
-        # Return HTML directly for iframe embedding
+        # Return HTML + editable copy fields
         return {
             "message": "Preview generated successfully",
             "status": "complete",
@@ -2248,8 +2455,23 @@ async def preview_from_url(request: PreviewRequest, _: bool = Depends(verify_api
             "html": html_content,
             "preview_url": f"/preview/{preview_id}",
             "url": request.url,
-            "estimated_cost": "$0.02-0.04",
-            "note": "This is a preview. Call /generate-from-url to render full video with AI backgrounds."
+            "estimated_cost": "$0.03-0.05",
+            # Editable copy fields - user can modify these and resubmit
+            "copy": {
+                "headline": copy_data.get("headline", ""),
+                "subheadline": copy_data.get("subheadline", ""),
+                "tagline": copy_data.get("tagline", ""),
+                "cta_text": copy_data.get("cta_text", "Shop Now"),
+                "frame_headlines": copy_data.get("frame_headlines", []),
+            },
+            # Product info for context
+            "product": {
+                "name": copy_data.get("product_name", ""),
+                "price": copy_data.get("price", ""),
+                "brand": copy_data.get("brand", ""),
+                "category": copy_data.get("category", "")
+            },
+            "note": "Edit the 'copy' fields above, then call /generate-from-url with custom_headline, custom_subheadline, etc. to render video with your edits."
         }
 
     except Exception as e:
