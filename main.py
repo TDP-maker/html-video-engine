@@ -1487,16 +1487,18 @@ Return ONLY complete HTML. No explanations."""
             "2. FULL-BLEED IMAGES - Each image fills the ENTIRE 1080x1920 frame edge-to-edge",
             "3. USE .lifestyle-img CLASS - This makes images cover the full frame",
             "4. NO PRODUCT CUTOUTS - Do NOT use .product-wrap or floating products",
-            "5. NO AI BACKGROUNDS - Use the original image as the background",
-            "6. SIMPLE TEXT - One headline per frame, positioned at bottom",
+            "5. NO AI BACKGROUNDS - Use the original image AS the background",
+            "6. MINIMAL TEXT - One short headline per frame, at the bottom only",
             "7. NO OVERLAPPING TEXT - Only one text element visible at a time",
+            "8. NO TRUST BADGES - Skip trust badges for fashion (keep it clean)",
+            "9. NO PRICE BADGES ON IMAGES - Only on CTA frame if needed",
             "",
             "CORRECT FRAME STRUCTURE:",
             '<div class="frame lifestyle active">',
             '  <img src="IMAGE_URL" class="lifestyle-img">',
             '  <div class="lifestyle-overlay"></div>',
             '  <div class="text-area">',
-            '    <h1>Single <span class="text-gradient">Headline</span></h1>',
+            '    <h1>Simple <span class="text-gradient">Headline</span></h1>',
             '  </div>',
             '</div>',
             "",
@@ -1505,6 +1507,10 @@ Return ONLY complete HTML. No explanations."""
             "- Images floating on generated backgrounds",
             "- Multiple headlines overlapping",
             "- .product-wrap with small centered images",
+            "- Trust badges floating in middle of frame",
+            "- Cluttered frames with too many elements",
+            "",
+            "KEEP IT SIMPLE: Big beautiful image + minimal text = fashion editorial style",
         ])
     else:
         user_prompt_parts.extend([
@@ -1519,10 +1525,10 @@ Return ONLY complete HTML. No explanations."""
 
     if is_lifestyle_product:
         user_prompt_parts.extend([
-            "1. ONE image per frame, FULL-BLEED (fills entire 1080x1920)",
-            "2. Use .lifestyle-img class on all images",
-            "3. ONE headline per frame - no overlapping text",
-            "4. Add .lifestyle-overlay for text readability",
+            "1. ONE image per frame, FULL-BLEED using .lifestyle-img class",
+            "2. MINIMAL design - just image + one headline + overlay",
+            "3. NO badges, NO extra elements, NO clutter",
+            "4. Fashion editorial style = clean and simple",
         ])
     else:
         user_prompt_parts.extend([
