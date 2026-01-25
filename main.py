@@ -369,12 +369,10 @@ body { background: #0a0a0a; }
 }
 .product-img { width: 850px; height: auto; max-height: 850px; object-fit: contain; filter: drop-shadow(0 50px 100px rgba(0,0,0,0.6)); }
 
-/* LIFESTYLE TREATMENT - Full bleed, edge to edge */
-.frame.lifestyle { padding: 0 !important; }
-.lifestyle-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transform: scale(1.05); }
+/* LIFESTYLE TREATMENT */
+.frame.lifestyle { padding-top: 0; padding-right: 0; }
+.lifestyle-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transform: scale(1.08); }
 .lifestyle-overlay { position: absolute; bottom: 0; left: 0; width: 100%; height: 70%; background: linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.7) 40%, transparent 100%); z-index: 1; }
-/* Text on lifestyle frames still respects safe zones */
-.frame.lifestyle .text-area { bottom: 450px; padding-right: 180px; }
 
 /* PREMIUM TEXT STYLING - Above Instagram's bottom UI (420px from bottom) */
 .text-area { position: absolute; bottom: 450px; text-align: center; width: 100%; padding: 0 100px; padding-right: 180px; transform: translateY(30px); z-index: 10; }
@@ -429,22 +427,11 @@ PREMIUM ELEMENTS TO INCLUDE:
 
 IMAGE TREATMENT - CHOOSE BASED ON IMAGE TYPE:
 
-**PRODUCT treatment** (isolated shots on white/plain bg):
-- Product image stays INSIDE safe zone (max 850px)
-- Text stays INSIDE safe zone (450px from bottom, 180px from right)
+**PRODUCT treatment** (isolated shots):
 <div class="product-wrap"><img src="URL" class="product-img"></div>
 
-**LIFESTYLE treatment** (contextual/environmental/hero shots):
-- Image goes FULL BLEED - covers entire 1080x1920, edge to edge, NO gaps
-- Text overlay MUST still be in safe zone (use text-area class)
-- Gradient overlay protects text readability
+**LIFESTYLE treatment** (contextual/environmental):
 <div class="frame lifestyle active"><img src="URL" class="lifestyle-img"><div class="lifestyle-overlay"></div><div class="text-area">...</div></div>
-
-KEY DIFFERENCE:
-- Lifestyle IMAGES = full frame, no gaps, bleeds to all edges
-- Lifestyle TEXT = still in safe zone, not covered by Instagram UI
-- Product IMAGES = contained in safe zone with gradient bg
-- Product TEXT = in safe zone
 
 FRAME STRUCTURE:
 1. HERO: Impactful opening - lifestyle OR dramatic product reveal
