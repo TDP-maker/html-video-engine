@@ -921,7 +921,7 @@ body {{ background: #0a0a0a; }}
 }}
 @keyframes glowMove {{
   0%, 100% {{ transform: translate(0, 0) scale(1); }}
-  50% {{ transform: translate(30px, -30px) scale(1.1); }}
+  50% {{ transform: translate(10px, -10px) scale(1.02); }}
 }}
 
 /* FRAME TRANSITIONS - Products can fill entire frame */
@@ -934,7 +934,7 @@ body {{ background: #0a0a0a; }}
 .content-area {{ flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; }}
 
 /* PRODUCT ANIMATIONS */
-.frame.active .product-wrap {{ animation: floatIn 1s cubic-bezier(0.34, 1.56, 0.64, 1) forwards, float 4s ease-in-out 1s infinite; }}
+.frame.active .product-wrap {{ animation: floatIn 1.2s ease-out forwards, float 6s ease-in-out 1.5s infinite; }}
 .frame.active .text-area {{ animation: fadeUp 0.8s ease-out 0.4s forwards; opacity: 0; }}
 .frame.active .lifestyle-img {{ animation: zoomIn 1.2s ease-out forwards; }}
 .frame.active .accent-line {{ animation: lineGrow 0.6s ease-out 0.6s forwards; }}
@@ -1162,7 +1162,7 @@ p {{ font-family: 'Inter', sans-serif; font-size: 32px; font-weight: 400; color:
 }}
 @keyframes float {{
   0%, 100% {{ transform: translateY(0); }}
-  50% {{ transform: translateY(-12px); }}
+  50% {{ transform: translateY(-6px); }}
 }}
 @keyframes fadeUp {{
   0% {{ opacity: 0; transform: translateY(30px); }}
