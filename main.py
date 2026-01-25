@@ -211,115 +211,149 @@ async def render_video_from_html(html_content: str, video_id: str, format: str =
         print(f"❌ [{video_id}] Error: {e}")
 
 
+async def extract_images_with_playwright(url: str) -> tuple[list, str, str]:
+    """Use Playwright to load page and extract images from rendered DOM"""
+    product_images = []
+    page_title = ""
+    page_description = ""
+
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(args=["--no-sandbox"])
+            page = await browser.new_page()
+
+            await page.goto(url, wait_until="networkidle", timeout=30000)
+            await page.wait_for_timeout(2000)  # Extra wait for lazy-loaded images
+
+            # Get page title and description
+            page_title = await page.title()
+            meta_desc = await page.query_selector('meta[name="description"]')
+            if meta_desc:
+                page_description = await meta_desc.get_attribute("content") or ""
+
+            # Extract images from rendered DOM
+            images = await page.evaluate("""() => {
+                const images = [];
+
+                // Get og:image first (usually best quality)
+                const ogImage = document.querySelector('meta[property="og:image"]');
+                if (ogImage) images.push(ogImage.content);
+
+                // Get all img elements
+                document.querySelectorAll('img').forEach(img => {
+                    let src = img.src || img.dataset.src || img.getAttribute('data-lazy-src');
+                    if (src && src.startsWith('http')) {
+                        // Filter out tiny images, icons, tracking pixels
+                        const width = img.naturalWidth || img.width || 0;
+                        const height = img.naturalHeight || img.height || 0;
+                        if (width >= 200 || height >= 200 || src.includes('product') || src.includes('hero')) {
+                            images.push(src);
+                        }
+                    }
+                });
+
+                // Get background images from divs
+                document.querySelectorAll('[style*="background"]').forEach(el => {
+                    const style = el.getAttribute('style');
+                    const match = style.match(/url\\(['"]?(https?[^'"\\)]+)['"]?\\)/);
+                    if (match) images.push(match[1]);
+                });
+
+                return [...new Set(images)]; // Remove duplicates
+            }""")
+
+            await browser.close()
+
+            # Filter images
+            for img in images:
+                if any(skip in img.lower() for skip in ['icon', 'logo', 'sprite', '.svg', 'pixel', 'tracking', '1x1', 'spacer', 'blank']):
+                    continue
+                if img not in product_images:
+                    product_images.append(img)
+
+            product_images = product_images[:10]  # Top 10 images
+
+    except Exception as e:
+        print(f"⚠️ Playwright extraction error: {e}")
+
+    return product_images, page_title, page_description
+
+
 async def generate_html_from_url(url: str, prompt: str = "") -> str:
-    """Use OpenAI to generate HTML video content from a URL"""
+    """Use Playwright + OpenAI to generate HTML video content from a URL"""
 
-    base_url = '/'.join(url.split('/')[:3])  # Get domain like https://example.com
+    print(f"🔍 Extracting images with Playwright...")
+    product_images, page_title, page_description = await extract_images_with_playwright(url)
+    print(f"📸 Found {len(product_images)} product images")
 
+    # Also fetch raw HTML for text content
+    base_url = '/'.join(url.split('/')[:3])
     async with httpx.AsyncClient() as client:
         try:
             response = await client.get(url, follow_redirects=True, timeout=30)
-            page_content = response.text[:15000]
+            page_content = response.text[:10000]
         except Exception as e:
-            page_content = f"Could not fetch URL: {str(e)}"
-
-    # Extract image URLs from HTML
-    image_urls = []
-
-    # Find og:image (usually the main product image)
-    og_images = re.findall(r'property="og:image"\s+content="([^"]+)"', page_content)
-    og_images += re.findall(r'content="([^"]+)"\s+property="og:image"', page_content)
-    image_urls.extend(og_images)
-
-    # Find regular img tags
-    img_tags = re.findall(r'<img[^>]+src="([^"]+)"', page_content)
-    for img in img_tags:
-        if img.startswith('http'):
-            image_urls.append(img)
-        elif img.startswith('//'):
-            image_urls.append('https:' + img)
-        elif img.startswith('/'):
-            image_urls.append(base_url + img)
-
-    # Find srcset images
-    srcset_imgs = re.findall(r'srcset="([^"]+)"', page_content)
-    for srcset in srcset_imgs:
-        urls = re.findall(r'(https?://[^\s,]+)', srcset)
-        image_urls.extend(urls)
-
-    # Filter for likely product images (larger images, not icons)
-    product_images = []
-    for img in image_urls:
-        if any(skip in img.lower() for skip in ['icon', 'logo', 'sprite', '.svg', 'pixel', 'tracking', '1x1']):
-            continue
-        if img not in product_images:
-            product_images.append(img)
-
-    # Take top 10 images
-    product_images = product_images[:10]
-
-    print(f"📸 Found {len(product_images)} product images")
+            page_content = ""
 
     client = OpenAI()
 
-    system_prompt = """You are an expert at creating animated HTML product videos for Instagram/TikTok reels.
+    system_prompt = """You are a professional video ad designer creating high-end product videos for Instagram/TikTok.
 
-Create a multi-frame HTML video presentation with these requirements:
+Create a POLISHED, AD-READY HTML video with these specifications:
 
 STRUCTURE:
 - Use .frame class for each slide (5-7 frames)
-- First frame should be .frame.active
-- Include timing array: const timing = [3000, 4000, 4000, 4000, 4000, 3000];
-- Container: .reel-container with 1080x1920px
+- First frame: .frame.active (starts visible)
+- Add: const timing = [3000, 3500, 3500, 3500, 3500, 3000];
+- Container: .reel-container at 1080x1920px
+- All frames: opacity:0 by default, .frame.active has opacity:1
 
-IMAGES - CRITICAL:
-- Extract ALL product image URLs from the website HTML (look for <img src="...">, og:image, product images)
-- Use FULL absolute URLs for images (https://...)
-- Display product images prominently in the video frames
-- Add drop shadows and styling to make images pop
-- If you find multiple products, showcase them
+PRODUCT IMAGES - MUST USE:
+- Display the provided product images LARGE (500-700px width)
+- Center images with clean spacing
+- Add subtle drop-shadow: 0 20px 60px rgba(0,0,0,0.3)
+- Use object-fit: contain to preserve aspect ratio
+- Animate images: subtle float, scale, or fade effects
 
-STYLING:
-- Modern Google Fonts (Plus Jakarta Sans, Inter, etc.)
-- Brand colors extracted from the website
-- Gradient backgrounds matching brand
-- CSS animations (fadeIn, slideIn, scale, pulse)
-- Clean, bold typography
-- Product images should be large (400-600px) with animations
+PROFESSIONAL STYLING:
+- Font: 'Inter' or 'Plus Jakarta Sans' from Google Fonts
+- Clean, minimal design - lots of whitespace
+- Solid or subtle gradient backgrounds (not busy)
+- Text should be large and readable (50-80px headlines)
+- Use brand colors if detectable, otherwise elegant neutrals
+- NO emojis unless specifically requested
 
 ANIMATIONS:
-- Each .frame has opacity:0 by default, .frame.active has opacity:1
-- Include @keyframes for transitions
-- Animate product images: zoom, float, rotate slightly
-- Smooth, professional transitions
+- Smooth CSS transitions (0.5-1s duration)
+- Subtle movements - don't overdo it
+- Images: gentle scale (1 to 1.02) or float (translateY)
+- Text: fade in, slide up from bottom
+- Use @keyframes with ease-out timing
 
-CONTENT FLOW:
-1. Hook with main product image
-2. Product features/benefits with images
-3. Why choose this product
-4. Social proof or key benefit
-5. Call-to-action with product image
+FRAME CONTENT:
+1. HOOK: Large product image + short punchy headline (3-5 words)
+2. FEATURE 1: Product image + key benefit
+3. FEATURE 2: Another angle/product + second benefit
+4. SOCIAL PROOF: Testimonial style or key stat
+5. CTA: Product image + "Shop Now" / "Learn More" button style
 
-Return ONLY the complete HTML code."""
+Return ONLY valid HTML code, no explanations."""
 
-    # Build image list for prompt
-    images_text = "\n".join([f"- {img}" for img in product_images]) if product_images else "No images found"
+    # Build image list
+    images_text = "\n".join([f"{i+1}. {img}" for i, img in enumerate(product_images)]) if product_images else "No images found - use placeholder styling"
 
-    user_prompt = f"""Create an animated HTML video for:
+    user_prompt = f"""Create a premium product video ad:
 
+BRAND: {page_title}
+DESCRIPTION: {page_description}
 URL: {url}
 
-PRODUCT IMAGES FOUND (use these exact URLs):
+PRODUCT IMAGES TO USE (these are real, working URLs - use them!):
 {images_text}
 
-Website content:
-{page_content}
+{f"SPECIAL INSTRUCTIONS: {prompt}" if prompt else ""}
 
-{f"Instructions: {prompt}" if prompt else ""}
-
-IMPORTANT: Use the product images listed above in your HTML. Display them with <img src="URL"> tags.
-
-Generate complete HTML with animations."""
+Create a clean, professional, ad-ready HTML video showcasing these products. Make it look like a high-end brand advertisement."""
 
     response = client.chat.completions.create(
         model="gpt-4o",
