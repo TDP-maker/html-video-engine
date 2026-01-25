@@ -297,63 +297,72 @@ async def generate_html_from_url(url: str, prompt: str = "") -> str:
 
     client = OpenAI()
 
-    system_prompt = """You are a professional video ad designer creating high-end product videos for Instagram/TikTok.
+    system_prompt = """You are a professional video ad designer. Create Instagram Reel HTML videos.
 
-Create a POLISHED, AD-READY HTML video with these specifications:
+MANDATORY STRUCTURE (copy this exactly):
+```
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@700;900&display=swap');
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a0a; }
+.reel-container { width: 1080px; height: 1920px; position: relative; overflow: hidden; background: #0a0a0a; }
+.frame { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 200px; transition: opacity 0.5s ease-out; }
+.frame.active { opacity: 1; }
+.frame.active .product-img { animation: floatIn 0.8s ease-out forwards, float 3s ease-in-out 0.8s infinite; }
+.frame.active .text-area { animation: fadeUp 0.6s ease-out 0.3s forwards; opacity: 0; }
+.product-img { width: 900px; height: auto; max-height: 1100px; object-fit: contain; filter: drop-shadow(0 40px 80px rgba(0,0,0,0.5)); transform: scale(0.9) translateY(30px); opacity: 0; }
+.text-area { position: absolute; bottom: 150px; text-align: center; width: 100%; padding: 0 60px; transform: translateY(20px); }
+h1 { font-family: 'Inter', sans-serif; font-size: 90px; font-weight: 900; color: white; text-transform: uppercase; line-height: 1.1; }
+p { font-family: 'Inter', sans-serif; font-size: 42px; font-weight: 700; color: #888; margin-top: 20px; }
 
-STRUCTURE:
-- Use .frame class for each slide (5-7 frames)
-- First frame: .frame.active (starts visible)
-- Add: const timing = [3000, 3500, 3500, 3500, 3500, 3000];
-- Container: .reel-container at 1080x1920px
-- All frames: opacity:0 by default, .frame.active has opacity:1
+@keyframes floatIn {
+  0% { opacity: 0; transform: scale(0.9) translateY(30px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-15px); }
+}
+@keyframes fadeUp {
+  0% { opacity: 0; transform: translateY(20px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+</style>
+```
 
-PRODUCT IMAGES - MUST USE:
-- Display the provided product images LARGE (500-700px width)
-- Center images with clean spacing
-- Add subtle drop-shadow: 0 20px 60px rgba(0,0,0,0.3)
-- Use object-fit: contain to preserve aspect ratio
-- Animate images: subtle float, scale, or fade effects
+CRITICAL RULES:
+1. Product image: ALWAYS use class="product-img" with width: 900px
+2. Text: ALWAYS in div class="text-area" at bottom, NEVER beside the image
+3. Layout: Image on top (centered), text below - VERTICAL STACKING ONLY
+4. Background: Dark solid color (#0a0a0a) - NO white backgrounds or boxes around images
+5. Each frame: flex-direction: column to stack image above text
+6. Images load from URLs - just use <img src="URL" class="product-img">
+7. Animations are automatic via .frame.active CSS - no extra JS needed
 
-PROFESSIONAL STYLING:
-- Font: 'Inter' or 'Plus Jakarta Sans' from Google Fonts
-- Clean, minimal design - lots of whitespace
-- Solid or subtle gradient backgrounds (not busy)
-- Text should be large and readable (50-80px headlines)
-- Use brand colors if detectable, otherwise elegant neutrals
-- NO emojis unless specifically requested
+FRAME CONTENT (5-6 frames):
+1. HERO: Big product image + 2-3 word headline
+2. BENEFIT: Same/different product + key feature text
+3. DETAIL: Product + another benefit
+4. SOCIAL: Product + short testimonial/stat
+5. CTA: Product + "Shop Now" button style text
 
-ANIMATIONS:
-- Smooth CSS transitions (0.5-1s duration)
-- Subtle movements - don't overdo it
-- Images: gentle scale (1 to 1.02) or float (translateY)
-- Text: fade in, slide up from bottom
-- Use @keyframes with ease-out timing
+Add at end of HTML:
+<script>const timing = [3000, 3500, 3500, 3500, 3500, 3000];</script>
 
-FRAME CONTENT:
-1. HOOK: Large product image + short punchy headline (3-5 words)
-2. FEATURE 1: Product image + key benefit
-3. FEATURE 2: Another angle/product + second benefit
-4. SOCIAL PROOF: Testimonial style or key stat
-5. CTA: Product image + "Shop Now" / "Learn More" button style
-
-Return ONLY valid HTML code, no explanations."""
+Return ONLY the complete HTML. No explanations."""
 
     # Build image list
     images_text = "\n".join([f"{i+1}. {img}" for i, img in enumerate(product_images)]) if product_images else "No images found - use placeholder styling"
 
-    user_prompt = f"""Create a premium product video ad:
-
-BRAND: {page_title}
-DESCRIPTION: {page_description}
+    user_prompt = f"""Product: {page_title}
 URL: {url}
 
-PRODUCT IMAGES TO USE (these are real, working URLs - use them!):
+IMAGES (use these exact URLs with class="product-img"):
 {images_text}
 
-{f"SPECIAL INSTRUCTIONS: {prompt}" if prompt else ""}
+{f"EXTRA: {prompt}" if prompt else ""}
 
-Create a clean, professional, ad-ready HTML video showcasing these products. Make it look like a high-end brand advertisement."""
+Remember: Image ABOVE (900px wide, centered), text BELOW in text-area div. Dark background, NO white boxes."""
 
     response = client.chat.completions.create(
         model="gpt-4o",
