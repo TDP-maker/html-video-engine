@@ -4,6 +4,8 @@ import asyncio
 import subprocess
 import imageio_ffmpeg
 import httpx
+import base64
+import io
 from fastapi import FastAPI, BackgroundTasks, HTTPException, Header, Depends
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.security import APIKeyHeader
@@ -13,6 +15,11 @@ import uvicorn
 from openai import OpenAI
 import re
 from datetime import datetime
+from PIL import Image
+from collections import Counter
+
+# --- REMOVE.BG BACKGROUND REMOVAL ---
+REMOVE_BG_API_KEY = os.environ.get("REMOVE_BG_API_KEY", "")
 
 app = FastAPI()
 
@@ -240,11 +247,20 @@ async def render_video_from_html(html_content: str, video_id: str, format: str =
         print(f"❌ [{video_id}] Error: {e}")
 
 
-async def extract_images_with_playwright(url: str) -> tuple[list, str, str]:
-    """Use Playwright to load page and extract images from rendered DOM"""
+async def extract_images_with_playwright(url: str) -> tuple[list, str, str, dict]:
+    """Use Playwright to load page and extract images and text from rendered DOM"""
     product_images = []
     page_title = ""
     page_description = ""
+    extracted_copy = {
+        "product_name": "",
+        "price": "",
+        "description": "",
+        "features": [],
+        "brand": "",
+        "cta_text": "",
+        "all_text": []
+    }
 
     try:
         async with async_playwright() as p:
@@ -259,6 +275,131 @@ async def extract_images_with_playwright(url: str) -> tuple[list, str, str]:
             meta_desc = await page.query_selector('meta[name="description"]')
             if meta_desc:
                 page_description = await meta_desc.get_attribute("content") or ""
+
+            # Extract ALL text content from the page for smart copy
+            text_content = await page.evaluate("""() => {
+                const result = {
+                    product_name: '',
+                    price: '',
+                    description: '',
+                    features: [],
+                    brand: '',
+                    cta_text: '',
+                    headings: [],
+                    paragraphs: []
+                };
+
+                // Product name - try multiple selectors
+                const nameSelectors = [
+                    'h1', '[data-testid="product-title"]', '.product-title', '.product-name',
+                    '[itemprop="name"]', '.pdp-title', '#productTitle', '.product__title'
+                ];
+                for (const sel of nameSelectors) {
+                    const el = document.querySelector(sel);
+                    if (el && el.textContent.trim()) {
+                        result.product_name = el.textContent.trim().substring(0, 200);
+                        break;
+                    }
+                }
+
+                // Price - try multiple selectors
+                const priceSelectors = [
+                    '[data-testid="price"]', '.price', '[itemprop="price"]', '.product-price',
+                    '.current-price', '.sale-price', '#priceblock_ourprice', '.a-price-whole',
+                    '[data-price]', '.pdp-price'
+                ];
+                for (const sel of priceSelectors) {
+                    const el = document.querySelector(sel);
+                    if (el && el.textContent.trim()) {
+                        const priceText = el.textContent.trim();
+                        // Look for price pattern
+                        const priceMatch = priceText.match(/[$£€]?\\s*[\\d,]+\\.?\\d*/);
+                        if (priceMatch) {
+                            result.price = priceMatch[0].trim();
+                            break;
+                        }
+                    }
+                }
+
+                // Description
+                const descSelectors = [
+                    '[itemprop="description"]', '.product-description', '.description',
+                    '#productDescription', '.product-detail', '.pdp-description',
+                    '[data-testid="product-description"]'
+                ];
+                for (const sel of descSelectors) {
+                    const el = document.querySelector(sel);
+                    if (el && el.textContent.trim()) {
+                        result.description = el.textContent.trim().substring(0, 500);
+                        break;
+                    }
+                }
+
+                // Brand
+                const brandSelectors = [
+                    '[itemprop="brand"]', '.brand', '.product-brand', '[data-testid="brand"]',
+                    '.manufacturer', '.vendor'
+                ];
+                for (const sel of brandSelectors) {
+                    const el = document.querySelector(sel);
+                    if (el && el.textContent.trim()) {
+                        result.brand = el.textContent.trim().substring(0, 100);
+                        break;
+                    }
+                }
+
+                // Features/bullet points
+                const featureSelectors = [
+                    '.feature-list li', '.product-features li', '[data-testid="features"] li',
+                    '.benefits li', '.highlights li', '#feature-bullets li',
+                    '.product-highlights li', 'ul.features li'
+                ];
+                for (const sel of featureSelectors) {
+                    document.querySelectorAll(sel).forEach(li => {
+                        const text = li.textContent.trim();
+                        if (text && text.length > 5 && text.length < 200) {
+                            result.features.push(text);
+                        }
+                    });
+                    if (result.features.length > 0) break;
+                }
+
+                // CTA buttons
+                const ctaSelectors = [
+                    'button[type="submit"]', '.add-to-cart', '.buy-now', '[data-testid="add-to-cart"]',
+                    '.cta-button', '.purchase-button', '#add-to-cart-button'
+                ];
+                for (const sel of ctaSelectors) {
+                    const el = document.querySelector(sel);
+                    if (el && el.textContent.trim()) {
+                        result.cta_text = el.textContent.trim().substring(0, 50);
+                        break;
+                    }
+                }
+
+                // All headings
+                document.querySelectorAll('h1, h2, h3').forEach(h => {
+                    const text = h.textContent.trim();
+                    if (text && text.length > 3 && text.length < 150) {
+                        result.headings.push(text);
+                    }
+                });
+                result.headings = result.headings.slice(0, 10);
+
+                // Key paragraphs (first few meaningful ones)
+                document.querySelectorAll('p').forEach(p => {
+                    const text = p.textContent.trim();
+                    if (text && text.length > 30 && text.length < 300) {
+                        result.paragraphs.push(text);
+                    }
+                });
+                result.paragraphs = result.paragraphs.slice(0, 5);
+
+                return result;
+            }""")
+
+            extracted_copy = text_content
+            print(f"📝 Extracted copy: {extracted_copy.get('product_name', 'Unknown')[:50]}...")
 
             # Extract images from rendered DOM
             images = await page.evaluate("""() => {
@@ -305,28 +446,403 @@ async def extract_images_with_playwright(url: str) -> tuple[list, str, str]:
     except Exception as e:
         print(f"⚠️ Playwright extraction error: {e}")
 
-    return product_images, page_title, page_description
+    return product_images, page_title, page_description, extracted_copy
+
+
+async def remove_background(image_url: str) -> str:
+    """Remove background from product image using remove.bg API"""
+    if not REMOVE_BG_API_KEY:
+        print("⚠️ No REMOVE_BG_API_KEY set, skipping background removal")
+        return image_url
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(
+                "https://api.remove.bg/v1.0/removebg",
+                headers={"X-Api-Key": REMOVE_BG_API_KEY},
+                data={
+                    "image_url": image_url,
+                    "size": "auto",
+                    "format": "png"
+                }
+            )
+
+            if response.status_code == 200:
+                # Save the PNG with transparent background
+                current_folder = os.getcwd()
+                bg_removed_folder = os.path.join(current_folder, "bg_removed")
+                os.makedirs(bg_removed_folder, exist_ok=True)
+
+                filename = f"{uuid.uuid4().hex[:8]}.png"
+                filepath = os.path.join(bg_removed_folder, filename)
+
+                with open(filepath, "wb") as f:
+                    f.write(response.content)
+
+                print(f"✅ Background removed: {filename}")
+                # Return as file:// URL for Playwright to load
+                return f"file://{filepath}"
+            else:
+                print(f"⚠️ remove.bg error: {response.status_code} - {response.text}")
+                return image_url
+
+    except Exception as e:
+        print(f"⚠️ Background removal failed: {e}")
+        return image_url
+
+
+async def process_images_for_premium(product_images: list) -> list:
+    """Process images: remove backgrounds for product shots"""
+    if not REMOVE_BG_API_KEY or not product_images:
+        return product_images
+
+    processed = []
+    # Only process first 3 images to save API costs
+    for i, img_url in enumerate(product_images[:3]):
+        print(f"🎨 Processing image {i+1}/3...")
+        processed_url = await remove_background(img_url)
+        processed.append(processed_url)
+
+    # Add remaining unprocessed images
+    processed.extend(product_images[3:])
+    return processed
+
+
+async def generate_ai_background(product_title: str, product_category: str = "", brand_colors: dict = None) -> str:
+    """Generate an abstract/atmospheric background using DALL-E"""
+    try:
+        client = OpenAI()
+
+        # Use extracted brand colors if available
+        if brand_colors and brand_colors.get("primary"):
+            color_desc = f"Colors: {brand_colors['primary_name']}, {brand_colors['secondary_name']}, with subtle hints of {brand_colors['accent_name']}."
+        else:
+            color_desc = "Colors: deep purples, dark blues, hints of pink/magenta."
+
+        # Create a prompt for abstract background - NO product, just atmosphere
+        bg_prompt = f"""Abstract premium background for luxury advertising.
+Dark moody atmosphere with subtle gradients.
+Soft ethereal glow, bokeh light effects, gentle color transitions.
+{color_desc}
+Style: cinematic, high-end, minimal, elegant.
+NO products, NO text, NO logos, NO objects - ONLY abstract atmospheric visuals.
+Vertical 9:16 aspect ratio composition."""
+
+        print(f"🎨 Generating AI background...")
+
+        response = client.images.generate(
+            model="dall-e-3",
+            prompt=bg_prompt,
+            size="1024x1792",  # Vertical for reels
+            quality="standard",
+            n=1
+        )
+
+        bg_url = response.data[0].url
+        print(f"✅ AI background generated")
+
+        # Download and save locally
+        async with httpx.AsyncClient(timeout=60) as http_client:
+            img_response = await http_client.get(bg_url)
+            if img_response.status_code == 200:
+                current_folder = os.getcwd()
+                bg_folder = os.path.join(current_folder, "ai_backgrounds")
+                os.makedirs(bg_folder, exist_ok=True)
+
+                filename = f"bg_{uuid.uuid4().hex[:8]}.png"
+                filepath = os.path.join(bg_folder, filename)
+
+                with open(filepath, "wb") as f:
+                    f.write(img_response.content)
+
+                return f"file://{filepath}"
+
+        return bg_url
+
+    except Exception as e:
+        print(f"⚠️ AI background generation failed: {e}")
+        return ""
+
+
+def rgb_to_hex(r: int, g: int, b: int) -> str:
+    """Convert RGB to hex color"""
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
+def hex_to_rgb(hex_color: str) -> tuple:
+    """Convert hex to RGB tuple"""
+    hex_color = hex_color.lstrip('#')
+    return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+
+
+def get_color_name(hex_color: str) -> str:
+    """Get a descriptive name for a color based on its hue"""
+    r, g, b = hex_to_rgb(hex_color)
+
+    # Calculate brightness
+    brightness = (r * 299 + g * 587 + b * 114) / 1000
+
+    # Determine if it's a neutral color
+    max_rgb = max(r, g, b)
+    min_rgb = min(r, g, b)
+    saturation = (max_rgb - min_rgb) / max_rgb if max_rgb > 0 else 0
+
+    if saturation < 0.15:
+        if brightness < 50:
+            return "deep black"
+        elif brightness < 128:
+            return "dark gray"
+        elif brightness < 200:
+            return "light gray"
+        else:
+            return "white"
+
+    # Calculate hue
+    if max_rgb == min_rgb:
+        hue = 0
+    elif max_rgb == r:
+        hue = 60 * ((g - b) / (max_rgb - min_rgb)) % 360
+    elif max_rgb == g:
+        hue = 60 * ((b - r) / (max_rgb - min_rgb)) + 120
+    else:
+        hue = 60 * ((r - g) / (max_rgb - min_rgb)) + 240
+
+    # Map hue to color name
+    if hue < 15 or hue >= 345:
+        base = "red"
+    elif hue < 45:
+        base = "orange"
+    elif hue < 75:
+        base = "yellow"
+    elif hue < 150:
+        base = "green"
+    elif hue < 195:
+        base = "cyan"
+    elif hue < 255:
+        base = "blue"
+    elif hue < 285:
+        base = "purple"
+    elif hue < 345:
+        base = "pink"
+    else:
+        base = "red"
+
+    # Add brightness modifier
+    if brightness < 80:
+        return f"deep {base}"
+    elif brightness > 180:
+        return f"light {base}"
+    else:
+        return base
+
+
+def adjust_color_for_dark_bg(hex_color: str, min_brightness: int = 120) -> str:
+    """Adjust a color to ensure visibility on dark backgrounds"""
+    r, g, b = hex_to_rgb(hex_color)
+    brightness = (r * 299 + g * 587 + b * 114) / 1000
+
+    if brightness < min_brightness:
+        # Lighten the color while preserving hue
+        factor = min_brightness / max(brightness, 1)
+        r = min(255, int(r * factor))
+        g = min(255, int(g * factor))
+        b = min(255, int(b * factor))
+
+    return rgb_to_hex(r, g, b)
+
+
+async def extract_colors_from_image(image_url: str) -> dict:
+    """Extract dominant colors from a product image using k-means clustering"""
+    try:
+        print(f"🎨 Extracting colors from image...")
+
+        # Download image
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.get(image_url)
+            if response.status_code != 200:
+                print(f"⚠️ Failed to download image for color extraction")
+                return None
+
+            image_data = response.content
+
+        # Open and process image
+        img = Image.open(io.BytesIO(image_data))
+        img = img.convert('RGB')
+
+        # Resize for faster processing
+        img.thumbnail((150, 150))
+
+        # Get all pixels
+        pixels = list(img.getdata())
+
+        # Filter out near-white and near-black pixels (background)
+        filtered_pixels = []
+        for r, g, b in pixels:
+            brightness = (r * 299 + g * 587 + b * 114) / 1000
+            saturation = (max(r, g, b) - min(r, g, b)) / max(max(r, g, b), 1)
+
+            # Skip very dark, very light, or very unsaturated pixels
+            if 30 < brightness < 240 and saturation > 0.1:
+                # Quantize to reduce color variations (round to nearest 16)
+                r = (r // 16) * 16
+                g = (g // 16) * 16
+                b = (b // 16) * 16
+                filtered_pixels.append((r, g, b))
+
+        if len(filtered_pixels) < 10:
+            # Not enough colorful pixels, use all pixels
+            filtered_pixels = [(
+                (r // 16) * 16,
+                (g // 16) * 16,
+                (b // 16) * 16
+            ) for r, g, b in pixels]
+
+        # Count pixel frequencies
+        color_counts = Counter(filtered_pixels)
+
+        # Get top colors
+        top_colors = color_counts.most_common(10)
+
+        if not top_colors:
+            print(f"⚠️ No colors extracted")
+            return None
+
+        # Select distinct colors (not too similar to each other)
+        selected_colors = []
+        for color, count in top_colors:
+            if len(selected_colors) >= 3:
+                break
+
+            # Check if this color is distinct from already selected
+            is_distinct = True
+            for selected in selected_colors:
+                # Calculate color distance
+                dist = sum(abs(a - b) for a, b in zip(color, selected))
+                if dist < 100:  # Too similar
+                    is_distinct = False
+                    break
+
+            if is_distinct:
+                selected_colors.append(color)
+
+        # Ensure we have at least 3 colors (use variations if needed)
+        while len(selected_colors) < 3:
+            if selected_colors:
+                # Create a variation of the first color
+                r, g, b = selected_colors[0]
+                if len(selected_colors) == 1:
+                    # Complementary-ish color
+                    selected_colors.append((255 - r, 255 - g, 255 - b))
+                else:
+                    # Shifted hue
+                    selected_colors.append((g, b, r))
+            else:
+                # Fallback to default purple/pink theme
+                selected_colors = [(99, 102, 241), (236, 72, 153), (139, 92, 246)]
+                break
+
+        # Convert to hex and adjust for dark backgrounds
+        primary_hex = rgb_to_hex(*selected_colors[0])
+        secondary_hex = rgb_to_hex(*selected_colors[1])
+        accent_hex = rgb_to_hex(*selected_colors[2])
+
+        # Adjust colors for visibility on dark background
+        primary_adjusted = adjust_color_for_dark_bg(primary_hex)
+        secondary_adjusted = adjust_color_for_dark_bg(secondary_hex)
+        accent_adjusted = adjust_color_for_dark_bg(accent_hex)
+
+        result = {
+            "primary": primary_adjusted,
+            "secondary": secondary_adjusted,
+            "accent": accent_adjusted,
+            "primary_name": get_color_name(primary_adjusted),
+            "secondary_name": get_color_name(secondary_adjusted),
+            "accent_name": get_color_name(accent_adjusted),
+            "original_primary": primary_hex,
+            "original_secondary": secondary_hex,
+            "original_accent": accent_hex
+        }
+
+        print(f"✅ Extracted colors: {result['primary_name']} ({result['primary']}), {result['secondary_name']} ({result['secondary']}), {result['accent_name']} ({result['accent']})")
+
+        return result
+
+    except Exception as e:
+        print(f"⚠️ Color extraction failed: {e}")
+        return None
 
 
 async def generate_html_from_url(url: str, prompt: str = "") -> str:
     """Use Playwright + OpenAI to generate HTML video content from a URL"""
 
-    print(f"🔍 Extracting images with Playwright...")
-    product_images, page_title, page_description = await extract_images_with_playwright(url)
+    print(f"🔍 Extracting images and copy with Playwright...")
+    product_images, page_title, page_description, extracted_copy = await extract_images_with_playwright(url)
     print(f"📸 Found {len(product_images)} product images")
+    print(f"📝 Extracted product name: {extracted_copy.get('product_name', 'Unknown')[:50]}")
 
-    # Also fetch raw HTML for text content
-    base_url = '/'.join(url.split('/')[:3])
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.get(url, follow_redirects=True, timeout=30)
-            page_content = response.text[:10000]
-        except Exception as e:
-            page_content = ""
+    # Premium feature: Extract brand colors from product image
+    brand_colors = None
+    if product_images:
+        brand_colors = await extract_colors_from_image(product_images[0])
+
+    # Premium feature: Remove backgrounds if API key is set
+    if REMOVE_BG_API_KEY and product_images:
+        print(f"🎨 Removing backgrounds (premium mode)...")
+        product_images = await process_images_for_premium(product_images)
+        print(f"✅ Background removal complete")
+
+    # Premium feature: Generate AI background with brand colors
+    ai_background_url = ""
+    try:
+        ai_background_url = await generate_ai_background(page_title, "", brand_colors)
+    except Exception as e:
+        print(f"⚠️ Skipping AI background: {e}")
+
+    # Build smart copy constraints from extracted content
+    smart_copy = []
+    if extracted_copy.get("product_name"):
+        smart_copy.append(f"PRODUCT NAME: {extracted_copy['product_name']}")
+    if extracted_copy.get("brand"):
+        smart_copy.append(f"BRAND: {extracted_copy['brand']}")
+    if extracted_copy.get("price"):
+        smart_copy.append(f"PRICE: {extracted_copy['price']}")
+    if extracted_copy.get("description"):
+        smart_copy.append(f"DESCRIPTION: {extracted_copy['description'][:300]}")
+    if extracted_copy.get("features"):
+        features_text = " | ".join(extracted_copy['features'][:5])
+        smart_copy.append(f"FEATURES: {features_text}")
+    if extracted_copy.get("cta_text"):
+        smart_copy.append(f"CTA TEXT: {extracted_copy['cta_text']}")
+    if extracted_copy.get("headings"):
+        headings_text = " | ".join(extracted_copy['headings'][:5])
+        smart_copy.append(f"HEADINGS: {headings_text}")
+
+    smart_copy_text = "\n".join(smart_copy) if smart_copy else "No specific copy extracted - use generic premium messaging"
 
     client = OpenAI()
 
-    system_prompt = """You are a premium video ad designer. Create cinematic Instagram Reel HTML videos.
+    # Set up dynamic colors - use extracted brand colors or defaults
+    if brand_colors:
+        primary_color = brand_colors["primary"]
+        secondary_color = brand_colors["secondary"]
+        accent_color = brand_colors["accent"]
+        primary_rgb = hex_to_rgb(primary_color)
+        secondary_rgb = hex_to_rgb(secondary_color)
+        accent_rgb = hex_to_rgb(accent_color)
+        color_description = f"Brand colors extracted: {brand_colors['primary_name']} ({primary_color}), {brand_colors['secondary_name']} ({secondary_color}), {brand_colors['accent_name']} ({accent_color})"
+    else:
+        # Default purple/pink theme
+        primary_color = "#6366f1"
+        secondary_color = "#ec4899"
+        accent_color = "#8b5cf6"
+        primary_rgb = (99, 102, 241)
+        secondary_rgb = (236, 72, 153)
+        accent_rgb = (139, 92, 246)
+        color_description = "Using default theme colors"
+
+    print(f"🎨 {color_description}")
+
+    system_prompt = f"""You are a premium video ad designer. Create cinematic Instagram Reel HTML videos.
 
 ⚠️ INSTAGRAM SAFE ZONES - CRITICAL:
 - TOP 250px: Username/follow button overlay - NO important content
@@ -334,123 +850,212 @@ async def generate_html_from_url(url: str, prompt: str = "") -> str:
 - RIGHT 150px: Like/comment/share buttons - keep content left of this
 - SAFE AREA: Content should be within x:0-930px, y:250-1520px
 
-MANDATORY STRUCTURE (copy this exactly):
+🎨 BRAND COLORS (USE THESE THROUGHOUT):
+- Primary: {primary_color} (for main glows, shadows)
+- Secondary: {secondary_color} (for accent glows, gradients)
+- Accent: {accent_color} (for text gradients, highlights)
+
+MANDATORY STRUCTURE (copy this exactly, using the brand colors):
 ```
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
-* { margin: 0; padding: 0; box-sizing: border-box; }
+* {{ margin: 0; padding: 0; box-sizing: border-box; }}
 
-/* ANIMATED GRADIENT BACKGROUND */
-body { background: #0a0a0a; }
-.reel-container {
+/* ANIMATED GRADIENT BACKGROUND - Using brand colors */
+body {{ background: #0a0a0a; }}
+.reel-container {{
   width: 1080px; height: 1920px; position: relative; overflow: hidden;
   background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%);
-}
-.bg-glow {
+}}
+.bg-glow {{
   position: absolute; width: 150%; height: 150%; top: -25%; left: -25%;
-  background: radial-gradient(circle at 30% 20%, rgba(99,102,241,0.15) 0%, transparent 50%),
-              radial-gradient(circle at 70% 80%, rgba(236,72,153,0.1) 0%, transparent 50%);
+  background: radial-gradient(circle at 30% 20%, rgba({primary_rgb[0]},{primary_rgb[1]},{primary_rgb[2]},0.15) 0%, transparent 50%),
+              radial-gradient(circle at 70% 80%, rgba({secondary_rgb[0]},{secondary_rgb[1]},{secondary_rgb[2]},0.1) 0%, transparent 50%);
   animation: glowMove 8s ease-in-out infinite;
-}
-@keyframes glowMove {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(30px, -30px) scale(1.1); }
-}
+}}
+@keyframes glowMove {{
+  0%, 100% {{ transform: translate(0, 0) scale(1); }}
+  50% {{ transform: translate(30px, -30px) scale(1.1); }}
+}}
 
 /* FRAME TRANSITIONS - Products can fill entire frame */
-.frame { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0; transition: opacity 1s ease-in-out; }
-.frame.active { opacity: 1; transition: opacity 1s ease-in-out; }
-.frame.exit { opacity: 0; transition: opacity 1s ease-in-out; }
+.frame {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0; transition: opacity 1s ease-in-out; }}
+.frame.active {{ opacity: 1; transition: opacity 1s ease-in-out; }}
+.frame.exit {{ opacity: 0; transition: opacity 1s ease-in-out; }}
 
 /* Safe zone helper - balanced vertical distribution */
-.safe-zone { position: absolute; top: 200px; left: 80px; right: 180px; bottom: 350px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; }
-.content-area { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; }
+.safe-zone {{ position: absolute; top: 200px; left: 80px; right: 180px; bottom: 350px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; }}
+.content-area {{ flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; }}
 
 /* PRODUCT ANIMATIONS */
-.frame.active .product-wrap { animation: floatIn 1s cubic-bezier(0.34, 1.56, 0.64, 1) forwards, float 4s ease-in-out 1s infinite; }
-.frame.active .text-area { animation: fadeUp 0.8s ease-out 0.4s forwards; opacity: 0; }
-.frame.active .lifestyle-img { animation: zoomIn 1.2s ease-out forwards; }
-.frame.active .accent-line { animation: lineGrow 0.6s ease-out 0.6s forwards; }
+.frame.active .product-wrap {{ animation: floatIn 1s cubic-bezier(0.34, 1.56, 0.64, 1) forwards, float 4s ease-in-out 1s infinite; }}
+.frame.active .text-area {{ animation: fadeUp 0.8s ease-out 0.4s forwards; opacity: 0; }}
+.frame.active .lifestyle-img {{ animation: zoomIn 1.2s ease-out forwards; }}
+.frame.active .accent-line {{ animation: lineGrow 0.6s ease-out 0.6s forwards; }}
 
-/* PRODUCT TREATMENT - Can fill entire frame, no restrictions */
-.product-wrap { position: relative; transform: scale(0.9) translateY(20px); opacity: 0; z-index: 1; }
-.product-wrap::before {
+/* PRODUCT TREATMENT - Premium floating product with brand-colored glow */
+.product-wrap {{ position: relative; transform: scale(0.9) translateY(20px); opacity: 0; z-index: 1; }}
+.product-wrap::before {{
   content: ''; position: absolute; top: 50%; left: 50%;
-  transform: translate(-50%, -50%); width: 150%; height: 150%;
-  background: radial-gradient(ellipse at center, rgba(255,255,255,0.95) 0%, rgba(240,240,240,0.7) 30%, rgba(150,150,150,0.2) 50%, transparent 70%);
+  transform: translate(-50%, -50%); width: 120%; height: 120%;
+  background: radial-gradient(ellipse at center, rgba({primary_rgb[0]},{primary_rgb[1]},{primary_rgb[2]},0.2) 0%, rgba({secondary_rgb[0]},{secondary_rgb[1]},{secondary_rgb[2]},0.1) 40%, transparent 70%);
   z-index: -1; border-radius: 50%;
-}
-.product-img { width: 950px; height: auto; max-height: 1200px; object-fit: contain; filter: drop-shadow(0 50px 100px rgba(0,0,0,0.6)); }
+  filter: blur(40px);
+}}
+.product-img {{ width: 950px; height: auto; max-height: 1200px; object-fit: contain; filter: drop-shadow(0 30px 60px rgba(0,0,0,0.5)) drop-shadow(0 0 100px rgba({primary_rgb[0]},{primary_rgb[1]},{primary_rgb[2]},0.3)); }}
 
 /* LIFESTYLE TREATMENT - Full bleed, edge to edge */
-.frame.lifestyle { padding: 0 !important; }
-.lifestyle-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transform: scale(1.05); }
-.lifestyle-overlay { position: absolute; bottom: 0; left: 0; width: 100%; height: 60%; background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.6) 40%, transparent 100%); z-index: 1; }
+.frame.lifestyle {{ padding: 0 !important; }}
+.lifestyle-img {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transform: scale(1.05); }}
+.lifestyle-overlay {{ position: absolute; bottom: 0; left: 0; width: 100%; height: 60%; background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.6) 40%, transparent 100%); z-index: 1; }}
+
+/* AI BACKGROUND TREATMENT - Cinematic atmosphere */
+.ai-bg {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.6; z-index: 0; }}
+.frame.ai-background .ai-bg {{ animation: bgPulse 6s ease-in-out infinite; }}
+@keyframes bgPulse {{ 0%, 100% {{ transform: scale(1); opacity: 0.6; }} 50% {{ transform: scale(1.05); opacity: 0.7; }} }}
 
 /* PREMIUM TEXT STYLING - 15% from bottom (288px), above Instagram UI */
-.text-area { position: absolute; bottom: 300px; left: 0; text-align: center; width: 100%; padding: 0 120px; padding-right: 200px; transform: translateY(30px); z-index: 10; }
-h1 {
+.text-area {{ position: absolute; bottom: 300px; left: 0; text-align: center; width: 100%; padding: 0 120px; padding-right: 200px; transform: translateY(30px); z-index: 10; }}
+h1 {{
   font-family: 'Inter', sans-serif; font-size: 72px; font-weight: 900;
   color: white; text-transform: uppercase; line-height: 1.1; letter-spacing: -1px;
   text-shadow: 0 4px 30px rgba(0,0,0,0.5);
-}
-.text-gradient {
-  background: linear-gradient(135deg, #fff 0%, #a5b4fc 50%, #fff 100%);
+}}
+.text-gradient {{
+  background: linear-gradient(135deg, #fff 0%, {accent_color} 50%, #fff 100%);
   -webkit-background-clip: text; -webkit-text-fill-color: transparent;
   background-clip: text;
-}
-p { font-family: 'Inter', sans-serif; font-size: 32px; font-weight: 400; color: rgba(255,255,255,0.7); margin-top: 16px; letter-spacing: 1px; }
+}}
+p {{ font-family: 'Inter', sans-serif; font-size: 32px; font-weight: 400; color: rgba(255,255,255,0.7); margin-top: 16px; letter-spacing: 1px; }}
 
-/* ACCENT ELEMENTS */
-.accent-line { width: 0; height: 4px; background: linear-gradient(90deg, #6366f1, #ec4899); margin: 30px auto 0; border-radius: 2px; }
-@keyframes lineGrow { 0% { width: 0; } 100% { width: 120px; } }
+/* ACCENT ELEMENTS - Using brand colors */
+.accent-line {{ width: 0; height: 4px; background: linear-gradient(90deg, {primary_color}, {secondary_color}); margin: 30px auto 0; border-radius: 2px; }}
+@keyframes lineGrow {{ 0% {{ width: 0; }} 100% {{ width: 120px; }} }}
+
+/* CTA BUTTON - Animated call-to-action */
+.cta-button {{
+  display: inline-block;
+  padding: 20px 50px;
+  font-family: 'Inter', sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: white;
+  background: linear-gradient(135deg, {primary_color}, {secondary_color});
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 10px 40px rgba({primary_rgb[0]},{primary_rgb[1]},{primary_rgb[2]},0.4), 0 0 60px rgba({primary_rgb[0]},{primary_rgb[1]},{primary_rgb[2]},0.2);
+  opacity: 0;
+  transform: scale(0.8) translateY(30px);
+}}
+.cta-button::before {{
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 100%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  transition: left 0.5s;
+}}
+.cta-button::after {{
+  content: '';
+  position: absolute;
+  inset: -3px;
+  background: linear-gradient(135deg, {primary_color}, {secondary_color}, {accent_color});
+  border-radius: 50px;
+  z-index: -1;
+  opacity: 0;
+  animation: ctaPulse 2s ease-in-out infinite;
+}}
+.frame.active .cta-button {{
+  animation: ctaAppear 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 0.6s forwards, ctaFloat 3s ease-in-out 1.4s infinite;
+}}
+.frame.active .cta-button::before {{
+  animation: ctaShine 2s ease-in-out 1s infinite;
+}}
+@keyframes ctaAppear {{
+  0% {{ opacity: 0; transform: scale(0.8) translateY(30px); }}
+  100% {{ opacity: 1; transform: scale(1) translateY(0); }}
+}}
+@keyframes ctaFloat {{
+  0%, 100% {{ transform: translateY(0); }}
+  50% {{ transform: translateY(-8px); }}
+}}
+@keyframes ctaShine {{
+  0% {{ left: -100%; }}
+  50%, 100% {{ left: 100%; }}
+}}
+@keyframes ctaPulse {{
+  0%, 100% {{ opacity: 0; transform: scale(1); }}
+  50% {{ opacity: 0.5; transform: scale(1.05); }}
+}}
 
 /* PROGRESS BAR (top of screen) */
-.progress-bar { position: absolute; top: 60px; left: 80px; right: 80px; height: 4px; background: rgba(255,255,255,0.2); border-radius: 2px; z-index: 100; display: flex; gap: 8px; }
-.progress-segment { flex: 1; height: 100%; background: rgba(255,255,255,0.3); border-radius: 2px; overflow: hidden; }
-.progress-segment.active::after { content: ''; display: block; height: 100%; background: white; animation: progressFill var(--duration, 3s) linear forwards; }
-.progress-segment.done { background: white; }
-@keyframes progressFill { 0% { width: 0; } 100% { width: 100%; } }
+.progress-bar {{ position: absolute; top: 60px; left: 80px; right: 80px; height: 4px; background: rgba(255,255,255,0.2); border-radius: 2px; z-index: 100; display: flex; gap: 8px; }}
+.progress-segment {{ flex: 1; height: 100%; background: rgba(255,255,255,0.3); border-radius: 2px; overflow: hidden; }}
+.progress-segment.active::after {{ content: ''; display: block; height: 100%; background: white; animation: progressFill var(--duration, 3s) linear forwards; }}
+.progress-segment.done {{ background: white; }}
+@keyframes progressFill {{ 0% {{ width: 0; }} 100% {{ width: 100%; }} }}
 
 /* KEYFRAMES */
-@keyframes floatIn {
-  0% { opacity: 0; transform: scale(0.85) translateY(40px); }
-  100% { opacity: 1; transform: scale(1) translateY(0); }
-}
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-12px); }
-}
-@keyframes fadeUp {
-  0% { opacity: 0; transform: translateY(30px); }
-  100% { opacity: 1; transform: translateY(0); }
-}
-@keyframes zoomIn {
-  0% { opacity: 0; transform: scale(1.08); }
-  100% { opacity: 1; transform: scale(1); }
-}
+@keyframes floatIn {{
+  0% {{ opacity: 0; transform: scale(0.85) translateY(40px); }}
+  100% {{ opacity: 1; transform: scale(1) translateY(0); }}
+}}
+@keyframes float {{
+  0%, 100% {{ transform: translateY(0); }}
+  50% {{ transform: translateY(-12px); }}
+}}
+@keyframes fadeUp {{
+  0% {{ opacity: 0; transform: translateY(30px); }}
+  100% {{ opacity: 1; transform: translateY(0); }}
+}}
+@keyframes zoomIn {{
+  0% {{ opacity: 0; transform: scale(1.08); }}
+  100% {{ opacity: 1; transform: scale(1); }}
+}}
 </style>
 ```
 
 PREMIUM ELEMENTS TO INCLUDE:
-1. Add <div class="bg-glow"></div> as first child of reel-container (animated ambient glow)
-2. Add <div class="accent-line"></div> after headlines for style
-3. Use class="text-gradient" on key words in headlines for gradient text effect
+1. Add <div class="bg-glow"></div> as first child of reel-container (animated ambient glow with brand colors)
+2. Add <div class="accent-line"></div> after headlines for style (uses brand gradient)
+3. Use class="text-gradient" on key words in headlines for gradient text effect (uses brand accent color)
 4. Add progress bar at top showing video segments
+5. Add <button class="cta-button">SHOP NOW</button> on the FINAL frame (animated CTA with glow/shine)
 
 IMAGE TREATMENT - CHOOSE BASED ON IMAGE TYPE:
 
 **PRODUCT treatment** (isolated shots):
 <div class="product-wrap"><img src="URL" class="product-img"></div>
 
+**PRODUCT + AI BACKGROUND** (premium cinematic look):
+<div class="frame ai-background active">
+  <img src="AI_BG_URL" class="ai-bg">
+  <div class="product-wrap"><img src="URL" class="product-img"></div>
+  <div class="text-area">...</div>
+</div>
+
 **LIFESTYLE treatment** (contextual/environmental):
 <div class="frame lifestyle active"><img src="URL" class="lifestyle-img"><div class="lifestyle-overlay"></div><div class="text-area">...</div></div>
+
+**CTA FRAME (final frame)** - with animated button:
+<div class="frame active">
+  <div class="product-wrap"><img src="URL" class="product-img"></div>
+  <div class="text-area">
+    <h1>Ready to <span class="text-gradient">Elevate</span>?</h1>
+    <button class="cta-button">SHOP NOW</button>
+  </div>
+</div>
 
 FRAME STRUCTURE:
 1. HERO: Impactful opening - lifestyle OR dramatic product reveal
 2. FEATURE: Product detail + benefit (use accent-line)
 3. VALUE: Social proof or key differentiator
-4. CTA: Strong call-to-action with product
+4. CTA: FINAL frame with animated CTA button - MUST include <button class="cta-button">
 
 ⚠️ SAFE ZONE RULES (TEXT ONLY - products can fill entire frame):
 - PRODUCTS/IMAGES: Can extend to ALL edges, fill entire 1080x1920, NO restrictions
@@ -464,6 +1069,17 @@ COMPOSITION:
 - Text positioned at bottom 15% in safe zone
 - No blank/empty areas - product fills available space
 
+🚨 SMART COPY CONSTRAINTS - CRITICAL:
+- ONLY use text/copy that is provided in the EXTRACTED COPY section below
+- DO NOT invent features, benefits, or claims not found on the page
+- DO NOT hallucinate product specifications or capabilities
+- If no price is provided, don't show a price
+- Use the EXACT product name as extracted
+- CTA button text should match the extracted CTA or use generic "Shop Now"/"Learn More"
+- Headlines can be shortened/reformatted but must derive from actual page content
+- You CAN use generic premium phrases like "Elevate Your Style" or "Experience the Difference" for transitions
+- Feature claims MUST come from the extracted features list
+
 Add at end: <script>const timing = [3500, 3500, 3500, 3500, 3500];</script>
 
 Return ONLY complete HTML. No explanations."""
@@ -471,15 +1087,34 @@ Return ONLY complete HTML. No explanations."""
     # Build image list
     images_text = "\n".join([f"{i+1}. {img}" for i, img in enumerate(product_images)]) if product_images else "No images found - use placeholder styling"
 
+    # AI background info
+    bg_info = f"\nAI BACKGROUND (use as .ai-bg src): {ai_background_url}" if ai_background_url else ""
+
+    # Color info for user prompt
+    color_info = ""
+    if brand_colors:
+        color_info = f"\n🎨 BRAND COLORS EXTRACTED FROM PRODUCT:\n- Primary: {brand_colors['primary']} ({brand_colors['primary_name']})\n- Secondary: {brand_colors['secondary']} ({brand_colors['secondary_name']})\n- Accent: {brand_colors['accent']} ({brand_colors['accent_name']})\nUse these colors for all glows, gradients, and accents to match the product!"
+
     user_prompt = f"""Product: {page_title}
 URL: {url}
 
 IMAGES (use these exact URLs):
 {images_text}
+{bg_info}
+{color_info}
 
-{f"EXTRA: {prompt}" if prompt else ""}
+📝 EXTRACTED COPY (USE ONLY THIS TEXT - NO HALLUCINATION):
+{smart_copy_text}
 
-CRITICAL: Product images should be LARGE (950px wide, up to 1200px tall) and FILL the frame. No blank space. Text in safe zone at bottom."""
+{f"EXTRA INSTRUCTIONS: {prompt}" if prompt else ""}
+
+CRITICAL RULES:
+1. Product images should be LARGE (950px wide, up to 1200px tall) and FILL the frame
+2. No blank space - products fill available area
+3. Text in safe zone at bottom
+4. ONLY use text from the EXTRACTED COPY section above - do not invent features or claims
+5. Final frame MUST have animated CTA button
+{f"6. Use the AI background image on some frames for premium cinematic look." if ai_background_url else ""}"""
 
     response = client.chat.completions.create(
         model="gpt-4o",
