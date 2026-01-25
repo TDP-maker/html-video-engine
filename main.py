@@ -180,18 +180,18 @@ async def render_video_from_html(html_content: str, video_id: str, format: str =
                     slide_duration_ms = timing[slide_num] if slide_num < len(timing) else 3000
 
                     if slide_num == 0:
-                        # First slide - just activate and capture
+                        # First slide - activate and let it stabilize
                         await page.evaluate("""() => {
                             document.querySelectorAll('.frame')[0].classList.add('active');
                         }""")
-                        await page.wait_for_timeout(100)  # Let animations start
+                        await page.wait_for_timeout(500)  # Wait for CSS to fully apply
 
                         # Capture frames for this slide
                         slide_frames = int((slide_duration_ms / 1000) * fps)
                         for i in range(slide_frames):
+                            await page.wait_for_timeout(int(1000 / fps))  # Wait first for stable frame
                             await page.screenshot(path=f"{output_folder}/frame_{frame_index:04d}.png")
                             frame_index += 1
-                            await page.wait_for_timeout(int(1000 / fps))
                     else:
                         # Transition: fade out previous, fade in current
                         await page.evaluate(f"""(slideNum) => {{
@@ -203,13 +203,13 @@ async def render_video_from_html(html_content: str, video_id: str, format: str =
                             frames[slideNum].classList.add('active');
                         }}""", slide_num)
 
-                        # Capture transition (1 second crossfade)
-                        transition_duration = 1.0
+                        # Capture transition (1.5 second smooth crossfade)
+                        transition_duration = 1.5
                         transition_frames = int(transition_duration * fps)
                         for i in range(transition_frames):
+                            await page.wait_for_timeout(int(1000 / fps))  # Wait first, then capture
                             await page.screenshot(path=f"{output_folder}/frame_{frame_index:04d}.png")
                             frame_index += 1
-                            await page.wait_for_timeout(int(1000 / fps))
 
                         # Clean up exit class
                         await page.evaluate(f"""(slideNum) => {{
@@ -219,9 +219,9 @@ async def render_video_from_html(html_content: str, video_id: str, format: str =
                         # Capture hold frames (remaining duration minus transition)
                         hold_frames = int((slide_duration_ms / 1000) * fps) - transition_frames
                         for i in range(max(0, hold_frames)):
+                            await page.wait_for_timeout(int(1000 / fps))  # Wait first for stable frame
                             await page.screenshot(path=f"{output_folder}/frame_{frame_index:04d}.png")
                             frame_index += 1
-                            await page.wait_for_timeout(int(1000 / fps))
 
                     video_jobs[video_id]["progress"] = int(((slide_num + 1) / frame_count) * 100)
                     print(f"✅ [{video_id}] Slide {slide_num + 1}/{frame_count}")
@@ -1080,20 +1080,23 @@ body {{ background: #0a0a0a; }}
   50% {{ transform: translate(10px, -10px) scale(1.02); }}
 }}
 
-/* FRAME TRANSITIONS - Products can fill entire frame */
-.frame {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0; transition: opacity 1s ease-in-out; }}
-.frame.active {{ opacity: 1; transition: opacity 1s ease-in-out; }}
-.frame.exit {{ opacity: 0; transition: opacity 1s ease-in-out; }}
+/* FRAME TRANSITIONS - Smooth crossfade */
+.frame {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0; transition: opacity 1.5s ease-in-out; }}
+.frame.active {{ opacity: 1; transition: opacity 1.5s ease-in-out; }}
+.frame.exit {{ opacity: 0; transition: opacity 1.5s ease-in-out; }}
 
 /* Safe zone helper - balanced vertical distribution */
 .safe-zone {{ position: absolute; top: 200px; left: 80px; right: 180px; bottom: 350px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; }}
 .content-area {{ flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; }}
 
-/* PRODUCT ANIMATIONS */
+/* PRODUCT ANIMATIONS - Only for non-lifestyle */
 .frame.active .product-wrap {{ animation: floatIn 1.2s ease-out forwards, float 6s ease-in-out 1.5s infinite; }}
 .frame.active .text-area {{ animation: fadeUp 0.8s ease-out 0.4s forwards; opacity: 0; }}
-.frame.active .lifestyle-img {{ animation: zoomIn 1.2s ease-out forwards; }}
 .frame.active .accent-line {{ animation: lineGrow 0.6s ease-out 0.6s forwards; }}
+
+/* LIFESTYLE - Override: NO animations at all */
+.frame.lifestyle.active .lifestyle-img {{ animation: none !important; transform: none !important; }}
+.frame.lifestyle.active .text-area {{ animation: fadeUp 0.8s ease-out 0.2s forwards; opacity: 0; }}
 
 /* PRODUCT TREATMENT - Premium floating product with brand-colored glow */
 .product-wrap {{ position: relative; transform: scale(0.9) translateY(20px); opacity: 0; z-index: 1; }}
