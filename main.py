@@ -310,12 +310,21 @@ body { background: #0a0a0a; }
 .frame.active { opacity: 1; }
 .frame.active .product-wrap { animation: floatIn 0.8s ease-out forwards, float 3s ease-in-out 0.8s infinite; }
 .frame.active .text-area { animation: fadeUp 0.6s ease-out 0.3s forwards; opacity: 0; }
+.frame.active .lifestyle-img { animation: zoomIn 0.8s ease-out forwards; }
+
+/* OPTION 1: Product shots (white/plain background) */
 .product-wrap { position: relative; transform: scale(0.9) translateY(30px); opacity: 0; z-index: 1; }
 .product-wrap::before { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 140%; height: 140%; background: radial-gradient(ellipse at center, rgba(255,255,255,0.95) 0%, rgba(240,240,240,0.7) 30%, rgba(150,150,150,0.3) 50%, transparent 70%); z-index: -1; border-radius: 50%; }
 .product-img { width: 900px; height: auto; max-height: 1100px; object-fit: contain; filter: drop-shadow(0 40px 80px rgba(0,0,0,0.5)); }
-.text-area { position: absolute; bottom: 150px; text-align: center; width: 100%; padding: 0 60px; transform: translateY(20px); }
+
+/* OPTION 2: Lifestyle/full-screen images */
+.frame.lifestyle { padding-top: 0; }
+.lifestyle-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transform: scale(1.05); }
+.lifestyle-overlay { position: absolute; bottom: 0; left: 0; width: 100%; height: 50%; background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%); }
+
+.text-area { position: absolute; bottom: 150px; text-align: center; width: 100%; padding: 0 60px; transform: translateY(20px); z-index: 10; }
 h1 { font-family: 'Inter', sans-serif; font-size: 90px; font-weight: 900; color: white; text-transform: uppercase; line-height: 1.1; }
-p { font-family: 'Inter', sans-serif; font-size: 42px; font-weight: 700; color: #888; margin-top: 20px; }
+p { font-family: 'Inter', sans-serif; font-size: 42px; font-weight: 700; color: rgba(255,255,255,0.8); margin-top: 20px; }
 
 @keyframes floatIn {
   0% { opacity: 0; transform: scale(0.9) translateY(30px); }
@@ -329,27 +338,43 @@ p { font-family: 'Inter', sans-serif; font-size: 42px; font-weight: 700; color: 
   0% { opacity: 0; transform: translateY(20px); }
   100% { opacity: 1; transform: translateY(0); }
 }
+@keyframes zoomIn {
+  0% { opacity: 0; transform: scale(1.05); }
+  100% { opacity: 1; transform: scale(1); }
+}
 </style>
 ```
 
+IMAGE TREATMENT - CHOOSE BASED ON IMAGE TYPE:
+
+**Use PRODUCT treatment** (product-wrap + product-img) when:
+- Image has white/plain background
+- Isolated product shot
+- Studio photography
+→ <div class="product-wrap"><img src="URL" class="product-img"></div>
+
+**Use LIFESTYLE treatment** (lifestyle-img + overlay) when:
+- Image shows product in context/environment
+- People wearing/using the product
+- Full scene photography
+- Hero/banner images
+→ <div class="frame lifestyle"><img src="URL" class="lifestyle-img"><div class="lifestyle-overlay"></div><div class="text-area">...</div></div>
+
 CRITICAL RULES:
-1. Product image: Wrap in <div class="product-wrap"><img src="URL" class="product-img"></div>
-2. Text: ALWAYS in div class="text-area" at bottom, NEVER beside the image
-3. Layout: Image on top (centered), text below - VERTICAL STACKING ONLY
-4. Background: Dark solid color (#0a0a0a) - the product-wrap creates a gradient fade
-5. Each frame: flex-direction: column to stack image above text
-6. The product-wrap::before creates a radial gradient that blends product bg to dark
-7. Animations are automatic via .frame.active CSS - no extra JS needed
+1. Analyze each image URL - choose treatment based on image type
+2. Mix both treatments for variety (lifestyle for impact, product for detail)
+3. Text ALWAYS in text-area div at bottom
+4. Lifestyle frames: add class="lifestyle" to .frame and include overlay for text readability
+5. Product frames: use product-wrap with gradient fade
 
-FRAME CONTENT (5-6 frames):
-1. HERO: Big product image + 2-3 word headline
-2. BENEFIT: Same/different product + key feature text
-3. DETAIL: Product + another benefit
-4. SOCIAL: Product + short testimonial/stat
-5. CTA: Product + "Shop Now" button style text
+FRAME SUGGESTIONS:
+1. HERO: Lifestyle full-screen OR big product
+2. BENEFIT: Product shot + feature text
+3. DETAIL: Lifestyle showing product in use
+4. SOCIAL: Product + testimonial
+5. CTA: Product or lifestyle + "Shop Now"
 
-Add at end of HTML:
-<script>const timing = [3000, 3500, 3500, 3500, 3500, 3000];</script>
+Add at end: <script>const timing = [3000, 3500, 3500, 3500, 3500, 3000];</script>
 
 Return ONLY the complete HTML. No explanations."""
 
