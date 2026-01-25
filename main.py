@@ -306,12 +306,27 @@ MANDATORY STRUCTURE (copy this exactly):
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { background: #0a0a0a; }
 .reel-container { width: 1080px; height: 1920px; position: relative; overflow: hidden; background: #0a0a0a; }
-.frame { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 200px; }
+.frame { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 200px; transition: opacity 0.5s ease-out; }
 .frame.active { opacity: 1; }
-.product-img { width: 900px; height: auto; max-height: 1100px; object-fit: contain; filter: drop-shadow(0 40px 80px rgba(0,0,0,0.5)); }
-.text-area { position: absolute; bottom: 150px; text-align: center; width: 100%; padding: 0 60px; }
-h1 { font-family: 'Inter', sans-serif; font-size: 90px; font-weight: 900; color: white; text-transform: uppercase; }
+.frame.active .product-img { animation: floatIn 0.8s ease-out forwards, float 3s ease-in-out 0.8s infinite; }
+.frame.active .text-area { animation: fadeUp 0.6s ease-out 0.3s forwards; opacity: 0; }
+.product-img { width: 900px; height: auto; max-height: 1100px; object-fit: contain; filter: drop-shadow(0 40px 80px rgba(0,0,0,0.5)); transform: scale(0.9) translateY(30px); opacity: 0; }
+.text-area { position: absolute; bottom: 150px; text-align: center; width: 100%; padding: 0 60px; transform: translateY(20px); }
+h1 { font-family: 'Inter', sans-serif; font-size: 90px; font-weight: 900; color: white; text-transform: uppercase; line-height: 1.1; }
 p { font-family: 'Inter', sans-serif; font-size: 42px; font-weight: 700; color: #888; margin-top: 20px; }
+
+@keyframes floatIn {
+  0% { opacity: 0; transform: scale(0.9) translateY(30px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-15px); }
+}
+@keyframes fadeUp {
+  0% { opacity: 0; transform: translateY(20px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
 </style>
 ```
 
@@ -322,6 +337,7 @@ CRITICAL RULES:
 4. Background: Dark solid color (#0a0a0a) - NO white backgrounds or boxes around images
 5. Each frame: flex-direction: column to stack image above text
 6. Images load from URLs - just use <img src="URL" class="product-img">
+7. Animations are automatic via .frame.active CSS - no extra JS needed
 
 FRAME CONTENT (5-6 frames):
 1. HERO: Big product image + 2-3 word headline
