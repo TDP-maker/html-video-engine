@@ -1539,10 +1539,10 @@ body {{ background: #0a0a0a; }}
   background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%);
 }}
 
-/* CINEMATIC VIGNETTE - Darker edges like film */
+/* CINEMATIC VIGNETTE - Subtle edge darkening */
 .vignette {{
   position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-  background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.5) 100%);
+  background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.25) 100%);
   z-index: 50; pointer-events: none;
 }}
 
@@ -1612,13 +1612,12 @@ body {{ background: #0a0a0a; }}
 .frame.lifestyle .price-badge {{ display: none; }}  /* No price badges */
 
 /* AI BACKGROUND TREATMENT - Cinematic atmosphere */
-.ai-bg {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.9; z-index: 0; }}
-.frame.ai-background .ai-bg {{ animation: bgSubtle 8s ease-in-out infinite; }}
-@keyframes bgSubtle {{ 0%, 100% {{ opacity: 0.9; }} 50% {{ opacity: 0.95; }} }}
+.ai-bg {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 1; z-index: 0; }}
+.frame.ai-background .ai-bg {{ animation: none; }}
 
-/* PREMIUM TEXT STYLING - 15% from bottom (288px), above Instagram UI */
-/* Centered with slight left offset to account for Instagram right-side buttons */
-.text-area {{ position: absolute; bottom: 300px; left: 60px; right: 180px; transform: translateY(30px); text-align: center; z-index: 10; }}
+/* PREMIUM TEXT STYLING - 15% from bottom, properly centered */
+/* Symmetric margins for true center alignment */
+.text-area {{ position: absolute; bottom: 300px; left: 80px; right: 80px; text-align: center; z-index: 10; }}
 h1 {{
   font-family: '{font_family}', sans-serif; font-size: 72px; font-weight: 900;
   color: {text_color}; text-transform: uppercase; line-height: 1.1; letter-spacing: -1px;
