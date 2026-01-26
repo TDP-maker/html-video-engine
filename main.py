@@ -405,6 +405,489 @@ component_registry.register(Component(
 ))
 
 
+# --- REGISTER INFOGRAPHIC FRAME COMPONENTS ---
+
+component_registry.register(Component(
+    name="stats_frame",
+    description="Statistics display with animated counters for infographics",
+    category=ComponentCategory.FRAME,
+    tags=["infographic", "stats", "numbers", "data"],
+    props=[
+        ComponentProp("headline", "Main headline text", required=True),
+        ComponentProp("stat1_number", "First stat number", default="98%"),
+        ComponentProp("stat1_label", "First stat label", default="Satisfaction"),
+        ComponentProp("stat2_number", "Second stat number", default="50K+"),
+        ComponentProp("stat2_label", "Second stat label", default="Customers"),
+        ComponentProp("stat3_number", "Third stat number", default="24/7"),
+        ComponentProp("stat3_label", "Third stat label", default="Support"),
+        ComponentProp("stat4_number", "Fourth stat number", default=""),
+        ComponentProp("stat4_label", "Fourth stat label", default=""),
+    ],
+    template='''<div class="frame active">
+  <div class="bg-glow"></div>
+  <div class="particle"></div>
+  <div class="particle"></div>
+  <div class="particle"></div>
+  <div class="text-area" style="bottom: auto; top: 200px;">
+    <h1 class="text-gradient text-clamp-2">{headline}</h1>
+    <div class="animated-divider"></div>
+  </div>
+  <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -30%); width: 90%; max-width: 800px;">
+    <div class="staggered-grid">
+      <div class="stat-card">
+        <span class="stat-number counter-animate">{stat1_number}</span>
+        <span class="stat-label">{stat1_label}</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-number counter-animate">{stat2_number}</span>
+        <span class="stat-label">{stat2_label}</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-number counter-animate">{stat3_number}</span>
+        <span class="stat-label">{stat3_label}</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-number counter-animate">{stat4_number}</span>
+        <span class="stat-label">{stat4_label}</span>
+      </div>
+    </div>
+  </div>
+</div>''',
+    variants={
+        "three_stats": '''<div class="frame active">
+  <div class="bg-glow"></div>
+  <div class="text-area" style="bottom: auto; top: 200px;">
+    <h1 class="text-gradient text-clamp-2">{headline}</h1>
+    <div class="animated-divider"></div>
+  </div>
+  <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -20%); width: 90%;">
+    <div style="display: flex; justify-content: center; gap: 30px; flex-wrap: wrap;">
+      <div class="stat-card">
+        <span class="stat-number counter-animate">{stat1_number}</span>
+        <span class="stat-label">{stat1_label}</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-number counter-animate">{stat2_number}</span>
+        <span class="stat-label">{stat2_label}</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-number counter-animate">{stat3_number}</span>
+        <span class="stat-label">{stat3_label}</span>
+      </div>
+    </div>
+  </div>
+</div>''',
+        "minimal": '''<div class="frame active">
+  <div class="bg-glow"></div>
+  <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center;">
+    <span class="stat-number counter-animate" style="font-size: 120px;">{stat1_number}</span>
+    <p class="stat-label" style="font-size: 28px; margin-top: 20px;">{stat1_label}</p>
+  </div>
+</div>'''
+    }
+))
+
+component_registry.register(Component(
+    name="feature_list_frame",
+    description="Animated feature list with checkmarks for infographics",
+    category=ComponentCategory.FRAME,
+    tags=["infographic", "features", "list", "benefits"],
+    props=[
+        ComponentProp("headline", "Main headline text", required=True),
+        ComponentProp("feature1", "First feature text", required=True),
+        ComponentProp("feature2", "Second feature text", default=""),
+        ComponentProp("feature3", "Third feature text", default=""),
+        ComponentProp("feature4", "Fourth feature text", default=""),
+        ComponentProp("check_icon", "Checkmark character", default="✓"),
+    ],
+    template='''<div class="frame active">
+  <div class="bg-glow"></div>
+  <div class="text-area" style="bottom: auto; top: 180px;">
+    <h1 class="text-gradient text-clamp-2">{headline}</h1>
+  </div>
+  <div style="position: absolute; top: 380px; left: 50%; transform: translateX(-50%); width: 85%;">
+    <div class="feature-list">
+      <div class="feature-item">
+        <span class="feature-check">{check_icon}</span>
+        <span class="feature-text">{feature1}</span>
+      </div>
+      <div class="feature-item">
+        <span class="feature-check">{check_icon}</span>
+        <span class="feature-text">{feature2}</span>
+      </div>
+      <div class="feature-item">
+        <span class="feature-check">{check_icon}</span>
+        <span class="feature-text">{feature3}</span>
+      </div>
+      <div class="feature-item">
+        <span class="feature-check">{check_icon}</span>
+        <span class="feature-text">{feature4}</span>
+      </div>
+    </div>
+  </div>
+</div>''',
+    variants={
+        "three_features": '''<div class="frame active">
+  <div class="bg-glow"></div>
+  <div class="text-area" style="bottom: auto; top: 200px;">
+    <h1 class="text-gradient text-clamp-2">{headline}</h1>
+  </div>
+  <div style="position: absolute; top: 400px; left: 50%; transform: translateX(-50%); width: 85%;">
+    <div class="feature-list">
+      <div class="feature-item">
+        <span class="feature-check">{check_icon}</span>
+        <span class="feature-text">{feature1}</span>
+      </div>
+      <div class="feature-item">
+        <span class="feature-check">{check_icon}</span>
+        <span class="feature-text">{feature2}</span>
+      </div>
+      <div class="feature-item">
+        <span class="feature-check">{check_icon}</span>
+        <span class="feature-text">{feature3}</span>
+      </div>
+    </div>
+  </div>
+</div>''',
+        "icon_cards": '''<div class="frame active">
+  <div class="bg-glow"></div>
+  <div class="text-area" style="bottom: auto; top: 180px;">
+    <h1 class="text-gradient text-clamp-2">{headline}</h1>
+  </div>
+  <div style="position: absolute; top: 400px; left: 50%; transform: translateX(-50%); width: 90%;">
+    <div class="staggered-grid">
+      <div class="icon-card">
+        <div class="icon">{icon1}</div>
+        <span class="label">{feature1}</span>
+      </div>
+      <div class="icon-card">
+        <div class="icon">{icon2}</div>
+        <span class="label">{feature2}</span>
+      </div>
+      <div class="icon-card">
+        <div class="icon">{icon3}</div>
+        <span class="label">{feature3}</span>
+      </div>
+      <div class="icon-card">
+        <div class="icon">{icon4}</div>
+        <span class="label">{feature4}</span>
+      </div>
+    </div>
+  </div>
+</div>'''
+    }
+))
+
+component_registry.register(Component(
+    name="comparison_frame",
+    description="Before/after or comparison visualization for infographics",
+    category=ComponentCategory.FRAME,
+    tags=["infographic", "comparison", "before-after", "data"],
+    props=[
+        ComponentProp("headline", "Main headline text", required=True),
+        ComponentProp("subheadline", "Secondary text", default=""),
+        ComponentProp("before_label", "Before/Left label", default="Before"),
+        ComponentProp("before_value", "Before value", default="30%"),
+        ComponentProp("after_label", "After/Right label", default="After"),
+        ComponentProp("after_value", "After value", default="95%"),
+    ],
+    template='''<div class="frame active">
+  <div class="bg-glow"></div>
+  <div class="text-area" style="bottom: auto; top: 200px;">
+    <h1 class="text-gradient text-clamp-2">{headline}</h1>
+    <p class="text-clamp-2" style="opacity: 0.7; margin-top: 15px;">{subheadline}</p>
+  </div>
+  <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -20%); width: 80%;">
+    <div style="display: flex; justify-content: space-between; margin-bottom: 30px;">
+      <div class="stat-card" style="flex: 1; margin-right: 20px;">
+        <span class="stat-label" style="margin-bottom: 10px;">{before_label}</span>
+        <span class="stat-number counter-animate" style="font-size: 56px;">{before_value}</span>
+      </div>
+      <div class="stat-card" style="flex: 1; margin-left: 20px; border-color: currentColor;">
+        <span class="stat-label" style="margin-bottom: 10px;">{after_label}</span>
+        <span class="stat-number counter-animate" style="font-size: 56px;">{after_value}</span>
+      </div>
+    </div>
+    <div class="comparison-bar" style="--before-width: 30%;">
+      <div class="before">{before_label}</div>
+      <div class="after">{after_label}</div>
+    </div>
+  </div>
+</div>''',
+    variants={
+        "progress_bars": '''<div class="frame active">
+  <div class="bg-glow"></div>
+  <div class="text-area" style="bottom: auto; top: 180px;">
+    <h1 class="text-gradient text-clamp-2">{headline}</h1>
+  </div>
+  <div style="position: absolute; top: 400px; left: 50%; transform: translateX(-50%); width: 80%;">
+    <div style="margin-bottom: 40px;">
+      <p style="margin-bottom: 10px; font-size: 20px; opacity: 0.8;">{before_label}</p>
+      <div class="progress-bar-horizontal" style="--fill-width: 30%;"><div class="fill"></div><span class="label">{before_value}</span></div>
+    </div>
+    <div>
+      <p style="margin-bottom: 10px; font-size: 20px; opacity: 0.8;">{after_label}</p>
+      <div class="progress-bar-horizontal" style="--fill-width: 95%;"><div class="fill"></div><span class="label">{after_value}</span></div>
+    </div>
+  </div>
+</div>'''
+    }
+))
+
+component_registry.register(Component(
+    name="quote_frame",
+    description="Testimonial or quote display for infographics",
+    category=ComponentCategory.FRAME,
+    tags=["infographic", "quote", "testimonial", "social-proof"],
+    props=[
+        ComponentProp("quote_text", "The quote text", required=True),
+        ComponentProp("author_name", "Quote author name", default=""),
+        ComponentProp("author_title", "Author title/role", default=""),
+        ComponentProp("rating", "Star rating (1-5)", default="5"),
+    ],
+    template='''<div class="frame active">
+  <div class="bg-glow"></div>
+  <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%;">
+    <div class="quote-block">
+      <p class="quote-text text-clamp-4">{quote_text}</p>
+      <div style="display: flex; align-items: center; gap: 15px; margin-top: 30px;">
+        <div>
+          <p class="quote-author">{author_name}</p>
+          <p style="font-size: 14px; opacity: 0.6;">{author_title}</p>
+        </div>
+      </div>
+      <div style="margin-top: 20px; font-size: 24px;">★★★★★</div>
+    </div>
+  </div>
+</div>''',
+    variants={
+        "minimal": '''<div class="frame active">
+  <div class="bg-glow"></div>
+  <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; text-align: center;">
+    <p class="quote-text text-clamp-3" style="font-size: 36px;">"{quote_text}"</p>
+    <p class="quote-author" style="margin-top: 30px;">— {author_name}</p>
+  </div>
+</div>''',
+        "with_image": '''<div class="frame active">
+  <div class="bg-glow"></div>
+  <div class="product-wrap" style="top: 200px;">
+    <img src="{image_url}" class="product-img" style="max-width: 300px; max-height: 300px;" alt="testimonial">
+  </div>
+  <div style="position: absolute; bottom: 300px; left: 80px; right: 80px;">
+    <div class="quote-block">
+      <p class="quote-text text-clamp-3">{quote_text}</p>
+      <p class="quote-author">{author_name}</p>
+    </div>
+  </div>
+</div>'''
+    }
+))
+
+component_registry.register(Component(
+    name="timeline_frame",
+    description="Process or step timeline for infographics",
+    category=ComponentCategory.FRAME,
+    tags=["infographic", "timeline", "process", "steps"],
+    props=[
+        ComponentProp("headline", "Main headline text", required=True),
+        ComponentProp("step1_title", "Step 1 title", required=True),
+        ComponentProp("step1_desc", "Step 1 description", default=""),
+        ComponentProp("step2_title", "Step 2 title", default=""),
+        ComponentProp("step2_desc", "Step 2 description", default=""),
+        ComponentProp("step3_title", "Step 3 title", default=""),
+        ComponentProp("step3_desc", "Step 3 description", default=""),
+    ],
+    template='''<div class="frame active">
+  <div class="bg-glow"></div>
+  <div class="text-area" style="bottom: auto; top: 150px;">
+    <h1 class="text-gradient text-clamp-2">{headline}</h1>
+  </div>
+  <div style="position: absolute; top: 350px; left: 50%; transform: translateX(-50%); width: 85%;">
+    <div class="timeline">
+      <div class="timeline-item">
+        <div class="timeline-dot"></div>
+        <div class="timeline-content">
+          <p class="timeline-title">{step1_title}</p>
+          <p class="timeline-desc">{step1_desc}</p>
+        </div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-dot"></div>
+        <div class="timeline-content">
+          <p class="timeline-title">{step2_title}</p>
+          <p class="timeline-desc">{step2_desc}</p>
+        </div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-dot"></div>
+        <div class="timeline-content">
+          <p class="timeline-title">{step3_title}</p>
+          <p class="timeline-desc">{step3_desc}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>''',
+    variants={
+        "four_steps": '''<div class="frame active">
+  <div class="bg-glow"></div>
+  <div class="text-area" style="bottom: auto; top: 120px;">
+    <h1 class="text-gradient text-clamp-2">{headline}</h1>
+  </div>
+  <div style="position: absolute; top: 280px; left: 50%; transform: translateX(-50%); width: 85%;">
+    <div class="timeline">
+      <div class="timeline-item">
+        <div class="timeline-dot"></div>
+        <div class="timeline-content">
+          <p class="timeline-title">{step1_title}</p>
+          <p class="timeline-desc">{step1_desc}</p>
+        </div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-dot"></div>
+        <div class="timeline-content">
+          <p class="timeline-title">{step2_title}</p>
+          <p class="timeline-desc">{step2_desc}</p>
+        </div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-dot"></div>
+        <div class="timeline-content">
+          <p class="timeline-title">{step3_title}</p>
+          <p class="timeline-desc">{step3_desc}</p>
+        </div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-dot"></div>
+        <div class="timeline-content">
+          <p class="timeline-title">{step4_title}</p>
+          <p class="timeline-desc">{step4_desc}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>'''
+    }
+))
+
+component_registry.register(Component(
+    name="data_highlight_frame",
+    description="Single data point highlight with animation for infographics",
+    category=ComponentCategory.FRAME,
+    tags=["infographic", "data", "highlight", "number"],
+    props=[
+        ComponentProp("headline", "Main headline/context text", default=""),
+        ComponentProp("big_number", "The main number to highlight", required=True),
+        ComponentProp("number_label", "Label below the number", required=True),
+        ComponentProp("subtext", "Additional context text", default=""),
+    ],
+    template='''<div class="frame active">
+  <div class="bg-glow"></div>
+  <div class="particle"></div>
+  <div class="particle"></div>
+  <div class="particle"></div>
+  <div class="particle"></div>
+  <div class="particle"></div>
+  <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; width: 90%;">
+    <p style="font-size: 24px; opacity: 0.7; margin-bottom: 30px;" class="fadeUp">{headline}</p>
+    <h1 class="text-gradient-wave counter-animate" style="font-size: 140px; line-height: 1;">{big_number}</h1>
+    <p style="font-size: 32px; margin-top: 20px; text-transform: uppercase; letter-spacing: 3px;">{number_label}</p>
+    <div class="animated-divider" style="margin-top: 40px;"></div>
+    <p style="font-size: 20px; opacity: 0.6; margin-top: 30px;" class="text-clamp-2">{subtext}</p>
+  </div>
+</div>''',
+    variants={
+        "with_progress": '''<div class="frame active">
+  <div class="bg-glow"></div>
+  <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; width: 85%;">
+    <div class="circular-progress" style="--progress-offset: 66; margin: 0 auto;">
+      <svg width="150" height="150">
+        <circle class="bg" cx="75" cy="75" r="70"></circle>
+        <circle class="progress" cx="75" cy="75" r="70"></circle>
+      </svg>
+      <span class="value">{big_number}</span>
+    </div>
+    <p style="font-size: 28px; margin-top: 30px; text-transform: uppercase; letter-spacing: 2px;">{number_label}</p>
+    <p style="font-size: 18px; opacity: 0.6; margin-top: 15px;">{subtext}</p>
+  </div>
+</div>'''
+    }
+))
+
+component_registry.register(Component(
+    name="icons_grid_frame",
+    description="Grid of animated icons with labels for infographics",
+    category=ComponentCategory.FRAME,
+    tags=["infographic", "icons", "grid", "features"],
+    props=[
+        ComponentProp("headline", "Main headline text", required=True),
+        ComponentProp("icon1", "First icon emoji/symbol", default="⚡"),
+        ComponentProp("label1", "First icon label", default="Fast"),
+        ComponentProp("icon2", "Second icon emoji/symbol", default="🔒"),
+        ComponentProp("label2", "Second icon label", default="Secure"),
+        ComponentProp("icon3", "Third icon emoji/symbol", default="💎"),
+        ComponentProp("label3", "Third icon label", default="Premium"),
+        ComponentProp("icon4", "Fourth icon emoji/symbol", default="🌟"),
+        ComponentProp("label4", "Fourth icon label", default="Quality"),
+    ],
+    template='''<div class="frame active">
+  <div class="bg-glow"></div>
+  <div class="text-area" style="bottom: auto; top: 180px;">
+    <h1 class="text-gradient text-clamp-2">{headline}</h1>
+    <div class="animated-divider"></div>
+  </div>
+  <div style="position: absolute; top: 450px; left: 50%; transform: translateX(-50%); width: 90%;">
+    <div class="staggered-grid">
+      <div class="icon-card">
+        <div class="icon icon-bounce">{icon1}</div>
+        <span class="label">{label1}</span>
+      </div>
+      <div class="icon-card">
+        <div class="icon icon-bounce">{icon2}</div>
+        <span class="label">{label2}</span>
+      </div>
+      <div class="icon-card">
+        <div class="icon icon-bounce">{icon3}</div>
+        <span class="label">{label3}</span>
+      </div>
+      <div class="icon-card">
+        <div class="icon icon-bounce">{icon4}</div>
+        <span class="label">{label4}</span>
+      </div>
+    </div>
+  </div>
+</div>''',
+    variants={
+        "horizontal": '''<div class="frame active">
+  <div class="bg-glow"></div>
+  <div class="text-area" style="bottom: auto; top: 250px;">
+    <h1 class="text-gradient text-clamp-2">{headline}</h1>
+  </div>
+  <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, 20%); width: 95%;">
+    <div style="display: flex; justify-content: space-around;">
+      <div class="icon-card" style="flex: 1; margin: 0 10px;">
+        <div class="icon icon-pulse">{icon1}</div>
+        <span class="label">{label1}</span>
+      </div>
+      <div class="icon-card" style="flex: 1; margin: 0 10px;">
+        <div class="icon icon-pulse">{icon2}</div>
+        <span class="label">{label2}</span>
+      </div>
+      <div class="icon-card" style="flex: 1; margin: 0 10px;">
+        <div class="icon icon-pulse">{icon3}</div>
+        <span class="label">{label3}</span>
+      </div>
+      <div class="icon-card" style="flex: 1; margin: 0 10px;">
+        <div class="icon icon-pulse">{icon4}</div>
+        <span class="label">{label4}</span>
+      </div>
+    </div>
+  </div>
+</div>'''
+    }
+))
+
+
 # --- REGISTER ELEMENT COMPONENTS ---
 
 component_registry.register(Component(
@@ -547,6 +1030,175 @@ component_registry.register(Component(
 ))
 
 
+# --- REGISTER INFOGRAPHIC TEXT COMPONENTS ---
+
+component_registry.register(Component(
+    name="animated_headline",
+    description="Headline with animated text effects for infographics",
+    category=ComponentCategory.TEXT,
+    tags=["headline", "animated", "infographic", "text"],
+    props=[
+        ComponentProp("text", "Headline text", required=True),
+    ],
+    template='''<h1 class="text-clamp-2 text-gradient">{text}</h1>''',
+    variants={
+        "typewriter": '''<h1 class="text-clamp-2 typewriter">{text}</h1>''',
+        "bounce": '''<h1 class="text-clamp-2"><span class="text-bounce">{text}</span></h1>''',
+        "wave": '''<h1 class="text-clamp-2 text-gradient-wave">{text}</h1>''',
+        "glitch": '''<h1 class="text-clamp-2 text-glitch" data-text="{text}">{text}</h1>''',
+        "pulse": '''<h1 class="text-clamp-2 text-pulse text-gradient">{text}</h1>''',
+        "reveal": '''<h1 class="text-clamp-2 text-reveal">{text}</h1>'''
+    }
+))
+
+component_registry.register(Component(
+    name="split_headline",
+    description="Split-animated headline for dramatic reveals",
+    category=ComponentCategory.TEXT,
+    tags=["headline", "split", "animated", "infographic"],
+    props=[
+        ComponentProp("left_text", "Left side text", required=True),
+        ComponentProp("right_text", "Right side text", required=True),
+    ],
+    template='''<h1 class="text-clamp-2">
+  <span class="text-split-left">{left_text}</span>
+  <span class="text-split-right">{right_text}</span>
+</h1>'''
+))
+
+component_registry.register(Component(
+    name="stat_number",
+    description="Large animated statistic number",
+    category=ComponentCategory.TEXT,
+    tags=["stat", "number", "infographic", "data"],
+    props=[
+        ComponentProp("number", "The statistic number", required=True),
+        ComponentProp("label", "Label for the stat", default=""),
+        ComponentProp("sublabel", "Additional context", default=""),
+    ],
+    template='''<div class="stat-card" style="background: transparent; border: none;">
+  <span class="stat-number counter-animate">{number}</span>
+  <span class="stat-label">{label}</span>
+  <span class="stat-sublabel">{sublabel}</span>
+</div>''',
+    variants={
+        "large": '''<div style="text-align: center;">
+  <span class="stat-number counter-animate" style="font-size: 120px;">{number}</span>
+  <p class="stat-label" style="font-size: 28px; margin-top: 20px;">{label}</p>
+</div>''',
+        "with_icon": '''<div class="stat-card" style="background: transparent; border: none;">
+  <span style="font-size: 48px; margin-bottom: 15px;">{icon}</span>
+  <span class="stat-number counter-animate">{number}</span>
+  <span class="stat-label">{label}</span>
+</div>'''
+    }
+))
+
+component_registry.register(Component(
+    name="word_by_word",
+    description="Word-by-word reveal animation for impactful text",
+    category=ComponentCategory.TEXT,
+    tags=["animated", "words", "infographic", "reveal"],
+    props=[
+        ComponentProp("word1", "First word", required=True),
+        ComponentProp("word2", "Second word", default=""),
+        ComponentProp("word3", "Third word", default=""),
+        ComponentProp("word4", "Fourth word", default=""),
+        ComponentProp("word5", "Fifth word", default=""),
+    ],
+    template='''<h1 class="text-clamp-2">
+  <span class="word-reveal">{word1}</span>
+  <span class="word-reveal">{word2}</span>
+  <span class="word-reveal">{word3}</span>
+  <span class="word-reveal">{word4}</span>
+  <span class="word-reveal">{word5}</span>
+</h1>'''
+))
+
+
+# --- REGISTER INFOGRAPHIC ELEMENT COMPONENTS ---
+
+component_registry.register(Component(
+    name="animated_badge",
+    description="Pop-in animated badge for highlighting info",
+    category=ComponentCategory.ELEMENT,
+    tags=["badge", "animated", "infographic", "highlight"],
+    props=[
+        ComponentProp("text", "Badge text", required=True),
+        ComponentProp("icon", "Optional icon", default=""),
+    ],
+    template='''<div class="animated-badge">{icon} {text}</div>''',
+    variants={
+        "with_icon": '''<div class="animated-badge"><span class="icon-pulse">{icon}</span> {text}</div>''',
+        "large": '''<div class="animated-badge" style="font-size: 20px; padding: 16px 32px;">{icon} {text}</div>'''
+    }
+))
+
+component_registry.register(Component(
+    name="progress_indicator",
+    description="Animated progress bar for showing metrics",
+    category=ComponentCategory.ELEMENT,
+    tags=["progress", "bar", "infographic", "data"],
+    props=[
+        ComponentProp("label", "Progress label", required=True),
+        ComponentProp("percentage", "Fill percentage", default="75"),
+    ],
+    template='''<div style="width: 100%; max-width: 600px;">
+  <p style="margin-bottom: 10px; font-size: 18px;">{label}</p>
+  <div class="progress-bar-horizontal" style="--fill-width: {percentage}%;">
+    <div class="fill"></div>
+    <span class="label">{percentage}%</span>
+  </div>
+</div>'''
+))
+
+component_registry.register(Component(
+    name="circular_stat",
+    description="Circular progress indicator with value",
+    category=ComponentCategory.ELEMENT,
+    tags=["circular", "progress", "infographic", "data"],
+    props=[
+        ComponentProp("value", "Display value", required=True),
+        ComponentProp("progress_percent", "Progress percentage (0-100)", default="75"),
+    ],
+    template='''<div class="circular-progress" style="--progress-offset: calc(440 - (440 * {progress_percent} / 100));">
+  <svg width="150" height="150">
+    <circle class="bg" cx="75" cy="75" r="70"></circle>
+    <circle class="progress" cx="75" cy="75" r="70"></circle>
+  </svg>
+  <span class="value">{value}</span>
+</div>'''
+))
+
+component_registry.register(Component(
+    name="feature_check_item",
+    description="Single feature item with animated checkmark",
+    category=ComponentCategory.ELEMENT,
+    tags=["feature", "check", "list", "infographic"],
+    props=[
+        ComponentProp("text", "Feature text", required=True),
+        ComponentProp("icon", "Check icon", default="✓"),
+    ],
+    template='''<div class="feature-item">
+  <span class="feature-check">{icon}</span>
+  <span class="feature-text">{text}</span>
+</div>'''
+))
+
+component_registry.register(Component(
+    name="floating_particles",
+    description="Ambient floating particle background effect",
+    category=ComponentCategory.ELEMENT,
+    tags=["particles", "background", "ambient", "infographic"],
+    props=[],
+    template='''<div class="particle"></div>
+<div class="particle"></div>
+<div class="particle"></div>
+<div class="particle"></div>
+<div class="particle"></div>'''
+))
+
+
 # --- REGISTER OVERLAY COMPONENTS ---
 
 component_registry.register(Component(
@@ -678,6 +1330,49 @@ VIDEO_PRESETS = {
         "frames": ["product_hero", "cta_frame"],
         "timing": [4000, 3000],
         "best_for": ["teasers", "stories", "quick ads"]
+    },
+    # --- INFOGRAPHIC PRESETS ---
+    "infographic_stats": {
+        "name": "Infographic Stats",
+        "description": "4-frame data-driven infographic: Stats → Features → Comparison → CTA",
+        "frames": ["stats_frame", "feature_list_frame", "comparison_frame", "cta_frame"],
+        "timing": [5000, 5000, 5000, 4000],
+        "best_for": ["data", "statistics", "reports", "infographics"]
+    },
+    "infographic_features": {
+        "name": "Infographic Features",
+        "description": "4-frame feature showcase: Icons → Features → Quote → CTA",
+        "frames": ["icons_grid_frame", "feature_list_frame", "quote_frame", "cta_frame"],
+        "timing": [4500, 5000, 4500, 4000],
+        "best_for": ["features", "benefits", "product info", "infographics"]
+    },
+    "infographic_process": {
+        "name": "Infographic Process",
+        "description": "4-frame process explanation: Headline → Timeline → Data → CTA",
+        "frames": ["data_highlight_frame", "timeline_frame", "stats_frame", "cta_frame"],
+        "timing": [4000, 6000, 5000, 4000],
+        "best_for": ["how-to", "process", "steps", "tutorials", "infographics"]
+    },
+    "infographic_testimonial": {
+        "name": "Infographic Testimonial",
+        "description": "4-frame testimonial video: Stats → Quote → Features → CTA",
+        "frames": ["stats_frame", "quote_frame", "icons_grid_frame", "cta_frame"],
+        "timing": [4500, 5000, 4500, 4000],
+        "best_for": ["testimonials", "reviews", "social proof", "infographics"]
+    },
+    "infographic_comparison": {
+        "name": "Infographic Comparison",
+        "description": "3-frame comparison video: Before/After → Stats → CTA",
+        "frames": ["comparison_frame", "stats_frame", "cta_frame"],
+        "timing": [5500, 5000, 4000],
+        "best_for": ["before-after", "results", "transformation", "infographics"]
+    },
+    "infographic_data_story": {
+        "name": "Infographic Data Story",
+        "description": "5-frame comprehensive data story with all infographic elements",
+        "frames": ["data_highlight_frame", "stats_frame", "comparison_frame", "feature_list_frame", "cta_frame"],
+        "timing": [4000, 5000, 5000, 5000, 4000],
+        "best_for": ["reports", "presentations", "comprehensive data", "infographics"]
     }
 }
 
@@ -3250,6 +3945,654 @@ p.subtitle-brand {{
   z-index: 45; pointer-events: none; opacity: 0;
 }}
 .frame.active .light-leak {{ animation: lightLeak 1.5s ease-out forwards; }}
+
+/* ============================================== */
+/* INFOGRAPHIC TEXT ANIMATIONS                   */
+/* ============================================== */
+
+/* TYPEWRITER EFFECT - Character by character reveal */
+.typewriter {{
+  overflow: hidden;
+  border-right: 3px solid {accent_color};
+  white-space: nowrap;
+  animation: typewriter 2s steps(30, end) forwards, blinkCaret 0.75s step-end infinite;
+}}
+.typewriter-slow {{
+  animation: typewriter 4s steps(40, end) forwards, blinkCaret 0.75s step-end infinite;
+}}
+@keyframes typewriter {{
+  0% {{ width: 0; }}
+  100% {{ width: 100%; }}
+}}
+@keyframes blinkCaret {{
+  0%, 100% {{ border-color: transparent; }}
+  50% {{ border-color: {accent_color}; }}
+}}
+
+/* COUNTER/NUMBER ANIMATION - For stats that count up */
+.counter-animate {{
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(20px);
+}}
+.frame.active .counter-animate {{
+  animation: counterReveal 0.6s var(--ease-out-expo) forwards;
+}}
+@keyframes counterReveal {{
+  0% {{ opacity: 0; transform: translateY(20px) scale(0.8); }}
+  100% {{ opacity: 1; transform: translateY(0) scale(1); }}
+}}
+
+/* WORD BY WORD REVEAL - Staggered word entrance */
+.word-reveal {{
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(30px) rotateX(-20deg);
+  transform-origin: center bottom;
+}}
+.frame.active .word-reveal {{
+  animation: wordReveal 0.5s var(--ease-out-expo) forwards;
+}}
+.frame.active .word-reveal:nth-child(1) {{ animation-delay: 0.1s; }}
+.frame.active .word-reveal:nth-child(2) {{ animation-delay: 0.2s; }}
+.frame.active .word-reveal:nth-child(3) {{ animation-delay: 0.3s; }}
+.frame.active .word-reveal:nth-child(4) {{ animation-delay: 0.4s; }}
+.frame.active .word-reveal:nth-child(5) {{ animation-delay: 0.5s; }}
+.frame.active .word-reveal:nth-child(6) {{ animation-delay: 0.6s; }}
+.frame.active .word-reveal:nth-child(7) {{ animation-delay: 0.7s; }}
+.frame.active .word-reveal:nth-child(8) {{ animation-delay: 0.8s; }}
+@keyframes wordReveal {{
+  0% {{ opacity: 0; transform: translateY(30px) rotateX(-20deg); }}
+  100% {{ opacity: 1; transform: translateY(0) rotateX(0); }}
+}}
+
+/* BOUNCE/ELASTIC TEXT - Playful bounce entrance */
+.text-bounce {{
+  display: inline-block;
+  opacity: 0;
+  transform: scale(0.3) translateY(-100px);
+}}
+.frame.active .text-bounce {{
+  animation: textBounce 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
+}}
+.frame.active .text-bounce:nth-child(1) {{ animation-delay: 0.1s; }}
+.frame.active .text-bounce:nth-child(2) {{ animation-delay: 0.15s; }}
+.frame.active .text-bounce:nth-child(3) {{ animation-delay: 0.2s; }}
+.frame.active .text-bounce:nth-child(4) {{ animation-delay: 0.25s; }}
+.frame.active .text-bounce:nth-child(5) {{ animation-delay: 0.3s; }}
+@keyframes textBounce {{
+  0% {{ opacity: 0; transform: scale(0.3) translateY(-100px); }}
+  50% {{ transform: scale(1.1) translateY(10px); }}
+  70% {{ transform: scale(0.95) translateY(-5px); }}
+  100% {{ opacity: 1; transform: scale(1) translateY(0); }}
+}}
+
+/* SPLIT TEXT REVEAL - Text splits from center */
+.text-split-left {{
+  display: inline-block;
+  opacity: 0;
+  transform: translateX(-50px);
+}}
+.text-split-right {{
+  display: inline-block;
+  opacity: 0;
+  transform: translateX(50px);
+}}
+.frame.active .text-split-left {{
+  animation: splitLeft 0.7s var(--ease-out-expo) 0.3s forwards;
+}}
+.frame.active .text-split-right {{
+  animation: splitRight 0.7s var(--ease-out-expo) 0.3s forwards;
+}}
+@keyframes splitLeft {{
+  0% {{ opacity: 0; transform: translateX(-50px); }}
+  100% {{ opacity: 1; transform: translateX(0); }}
+}}
+@keyframes splitRight {{
+  0% {{ opacity: 0; transform: translateX(50px); }}
+  100% {{ opacity: 1; transform: translateX(0); }}
+}}
+
+/* GLITCH TEXT EFFECT - Digital/tech feel */
+.text-glitch {{
+  position: relative;
+  display: inline-block;
+}}
+.text-glitch::before,
+.text-glitch::after {{
+  content: attr(data-text);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}}
+.text-glitch::before {{
+  left: 2px;
+  text-shadow: -2px 0 {primary_color};
+  clip: rect(24px, 550px, 90px, 0);
+  animation: glitch-anim-1 2s infinite linear alternate-reverse;
+}}
+.text-glitch::after {{
+  left: -2px;
+  text-shadow: -2px 0 {secondary_color};
+  clip: rect(85px, 550px, 140px, 0);
+  animation: glitch-anim-2 2s infinite linear alternate-reverse;
+}}
+@keyframes glitch-anim-1 {{
+  0% {{ clip: rect(20px, 9999px, 40px, 0); }}
+  25% {{ clip: rect(60px, 9999px, 80px, 0); }}
+  50% {{ clip: rect(10px, 9999px, 30px, 0); }}
+  75% {{ clip: rect(70px, 9999px, 100px, 0); }}
+  100% {{ clip: rect(40px, 9999px, 60px, 0); }}
+}}
+@keyframes glitch-anim-2 {{
+  0% {{ clip: rect(60px, 9999px, 80px, 0); }}
+  25% {{ clip: rect(10px, 9999px, 30px, 0); }}
+  50% {{ clip: rect(70px, 9999px, 100px, 0); }}
+  75% {{ clip: rect(20px, 9999px, 40px, 0); }}
+  100% {{ clip: rect(50px, 9999px, 70px, 0); }}
+}}
+
+/* GRADIENT WAVE TEXT - Animated gradient flow */
+.text-gradient-wave {{
+  background: linear-gradient(90deg, {primary_color}, {accent_color}, {secondary_color}, {primary_color});
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradientWave 3s ease infinite;
+}}
+@keyframes gradientWave {{
+  0% {{ background-position: 0% 50%; }}
+  50% {{ background-position: 100% 50%; }}
+  100% {{ background-position: 0% 50%; }}
+}}
+
+/* SCALE PULSE TEXT - Attention grabbing pulse */
+.text-pulse {{
+  animation: textPulse 2s ease-in-out infinite;
+}}
+@keyframes textPulse {{
+  0%, 100% {{ transform: scale(1); }}
+  50% {{ transform: scale(1.05); }}
+}}
+
+/* ============================================== */
+/* INFOGRAPHIC GRAPHIC ELEMENTS                  */
+/* ============================================== */
+
+/* STAT CARD - Animated statistics display */
+.stat-card {{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 30px 40px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 20px;
+  backdrop-filter: blur(10px);
+  opacity: 0;
+  transform: translateY(30px);
+}}
+.frame.active .stat-card {{
+  animation: statCardAppear 0.6s var(--ease-out-expo) forwards;
+}}
+.frame.active .stat-card:nth-child(1) {{ animation-delay: 0.2s; }}
+.frame.active .stat-card:nth-child(2) {{ animation-delay: 0.35s; }}
+.frame.active .stat-card:nth-child(3) {{ animation-delay: 0.5s; }}
+.frame.active .stat-card:nth-child(4) {{ animation-delay: 0.65s; }}
+@keyframes statCardAppear {{
+  0% {{ opacity: 0; transform: translateY(30px) scale(0.9); }}
+  100% {{ opacity: 1; transform: translateY(0) scale(1); }}
+}}
+.stat-number {{
+  font-family: '{font_family}', sans-serif;
+  font-size: 72px;
+  font-weight: 900;
+  color: {primary_color};
+  line-height: 1;
+  text-shadow: 0 0 30px rgba({primary_rgb[0]},{primary_rgb[1]},{primary_rgb[2]},0.5);
+}}
+.stat-label {{
+  font-family: 'Inter', sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.7);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-top: 10px;
+}}
+.stat-sublabel {{
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  color: rgba(255,255,255,0.5);
+  margin-top: 5px;
+}}
+
+/* CIRCULAR PROGRESS - Animated ring chart */
+.circular-progress {{
+  position: relative;
+  width: 150px;
+  height: 150px;
+  opacity: 0;
+  transform: scale(0.8);
+}}
+.frame.active .circular-progress {{
+  animation: circularAppear 0.8s var(--ease-out-expo) 0.3s forwards;
+}}
+@keyframes circularAppear {{
+  0% {{ opacity: 0; transform: scale(0.8) rotate(-90deg); }}
+  100% {{ opacity: 1; transform: scale(1) rotate(0); }}
+}}
+.circular-progress svg {{
+  transform: rotate(-90deg);
+}}
+.circular-progress circle {{
+  fill: none;
+  stroke-width: 10;
+  stroke-linecap: round;
+}}
+.circular-progress .bg {{
+  stroke: rgba(255,255,255,0.1);
+}}
+.circular-progress .progress {{
+  stroke: {primary_color};
+  stroke-dasharray: 440;
+  stroke-dashoffset: 440;
+  animation: circularFill 1.5s var(--ease-out-expo) 0.5s forwards;
+}}
+@keyframes circularFill {{
+  to {{ stroke-dashoffset: var(--progress-offset, 110); }}
+}}
+.circular-progress .value {{
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: '{font_family}', sans-serif;
+  font-size: 36px;
+  font-weight: 900;
+  color: white;
+}}
+
+/* HORIZONTAL PROGRESS BAR - Animated fill */
+.progress-bar-horizontal {{
+  width: 100%;
+  height: 12px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+}}
+.progress-bar-horizontal .fill {{
+  height: 100%;
+  background: linear-gradient(90deg, {primary_color}, {accent_color});
+  border-radius: 6px;
+  width: 0;
+}}
+.frame.active .progress-bar-horizontal .fill {{
+  animation: progressBarFill 1.2s var(--ease-out-expo) 0.4s forwards;
+}}
+@keyframes progressBarFill {{
+  to {{ width: var(--fill-width, 75%); }}
+}}
+.progress-bar-horizontal .label {{
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: white;
+  opacity: 0;
+}}
+.frame.active .progress-bar-horizontal .label {{
+  animation: fadeUp 0.5s var(--ease-out-expo) 1s forwards;
+}}
+
+/* FEATURE LIST - Animated checkmarks */
+.feature-list {{
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  max-width: 800px;
+}}
+.feature-item {{
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 20px 30px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.1);
+  opacity: 0;
+  transform: translateX(-30px);
+}}
+.frame.active .feature-item {{
+  animation: featureSlideIn 0.5s var(--ease-out-expo) forwards;
+}}
+.frame.active .feature-item:nth-child(1) {{ animation-delay: 0.2s; }}
+.frame.active .feature-item:nth-child(2) {{ animation-delay: 0.35s; }}
+.frame.active .feature-item:nth-child(3) {{ animation-delay: 0.5s; }}
+.frame.active .feature-item:nth-child(4) {{ animation-delay: 0.65s; }}
+.frame.active .feature-item:nth-child(5) {{ animation-delay: 0.8s; }}
+@keyframes featureSlideIn {{
+  0% {{ opacity: 0; transform: translateX(-30px); }}
+  100% {{ opacity: 1; transform: translateX(0); }}
+}}
+.feature-check {{
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  background: linear-gradient(135deg, {primary_color}, {secondary_color});
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  color: white;
+  opacity: 0;
+  transform: scale(0);
+}}
+.frame.active .feature-item .feature-check {{
+  animation: checkPop 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
+  animation-delay: inherit;
+}}
+@keyframes checkPop {{
+  0% {{ opacity: 0; transform: scale(0) rotate(-180deg); }}
+  100% {{ opacity: 1; transform: scale(1) rotate(0deg); }}
+}}
+.feature-text {{
+  font-family: 'Inter', sans-serif;
+  font-size: 24px;
+  font-weight: 500;
+  color: white;
+}}
+
+/* ICON ANIMATIONS - Various icon treatments */
+.icon-bounce {{
+  display: inline-block;
+  animation: iconBounce 2s ease-in-out infinite;
+}}
+@keyframes iconBounce {{
+  0%, 100% {{ transform: translateY(0); }}
+  50% {{ transform: translateY(-10px); }}
+}}
+.icon-spin {{
+  display: inline-block;
+  animation: iconSpin 3s linear infinite;
+}}
+@keyframes iconSpin {{
+  from {{ transform: rotate(0deg); }}
+  to {{ transform: rotate(360deg); }}
+}}
+.icon-pulse {{
+  display: inline-block;
+  animation: iconPulse 1.5s ease-in-out infinite;
+}}
+@keyframes iconPulse {{
+  0%, 100% {{ transform: scale(1); opacity: 1; }}
+  50% {{ transform: scale(1.2); opacity: 0.8; }}
+}}
+.icon-shake {{
+  display: inline-block;
+  animation: iconShake 0.5s ease-in-out infinite;
+}}
+@keyframes iconShake {{
+  0%, 100% {{ transform: translateX(0); }}
+  25% {{ transform: translateX(-3px); }}
+  75% {{ transform: translateX(3px); }}
+}}
+
+/* ANIMATED BADGE/TAG - Pop-in badge */
+.animated-badge {{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background: linear-gradient(135deg, {primary_color}, {secondary_color});
+  border-radius: 30px;
+  font-family: 'Inter', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: white;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: 0;
+  transform: scale(0) rotate(-10deg);
+  box-shadow: 0 10px 30px rgba({primary_rgb[0]},{primary_rgb[1]},{primary_rgb[2]},0.4);
+}}
+.frame.active .animated-badge {{
+  animation: badgePop 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55) 0.3s forwards;
+}}
+@keyframes badgePop {{
+  0% {{ opacity: 0; transform: scale(0) rotate(-10deg); }}
+  70% {{ transform: scale(1.1) rotate(3deg); }}
+  100% {{ opacity: 1; transform: scale(1) rotate(0deg); }}
+}}
+
+/* COMPARISON BAR - Before/After visual */
+.comparison-bar {{
+  display: flex;
+  width: 100%;
+  height: 60px;
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+}}
+.comparison-bar .before {{
+  background: rgba(255,255,255,0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  color: white;
+  width: 0;
+}}
+.comparison-bar .after {{
+  background: linear-gradient(90deg, {primary_color}, {accent_color});
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  color: white;
+  flex: 1;
+}}
+.frame.active .comparison-bar .before {{
+  animation: comparisonGrow 1s var(--ease-out-expo) 0.3s forwards;
+}}
+@keyframes comparisonGrow {{
+  to {{ width: var(--before-width, 30%); }}
+}}
+
+/* FLOATING PARTICLES - Ambient background effect */
+.particle {{
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: radial-gradient(circle, {primary_color}, transparent);
+  border-radius: 50%;
+  opacity: 0.6;
+  animation: particleFloat 6s ease-in-out infinite;
+}}
+.particle:nth-child(1) {{ left: 10%; top: 20%; animation-delay: 0s; }}
+.particle:nth-child(2) {{ left: 20%; top: 60%; animation-delay: 1s; animation-duration: 8s; }}
+.particle:nth-child(3) {{ left: 70%; top: 30%; animation-delay: 2s; animation-duration: 7s; }}
+.particle:nth-child(4) {{ left: 80%; top: 70%; animation-delay: 0.5s; }}
+.particle:nth-child(5) {{ left: 50%; top: 10%; animation-delay: 1.5s; animation-duration: 5s; }}
+@keyframes particleFloat {{
+  0%, 100% {{ transform: translateY(0) scale(1); opacity: 0.6; }}
+  50% {{ transform: translateY(-30px) scale(1.2); opacity: 0.8; }}
+}}
+
+/* ANIMATED DIVIDER - Line with gradient animation */
+.animated-divider {{
+  width: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, {primary_color}, {accent_color}, {secondary_color}, transparent);
+  margin: 30px auto;
+  border-radius: 2px;
+}}
+.frame.active .animated-divider {{
+  animation: dividerExpand 0.8s var(--ease-out-expo) 0.5s forwards;
+}}
+@keyframes dividerExpand {{
+  to {{ width: 200px; }}
+}}
+
+/* STAGGERED GRID - For multiple stat/icon cards */
+.staggered-grid {{
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+  width: 100%;
+  max-width: 700px;
+}}
+.staggered-grid > * {{
+  opacity: 0;
+  transform: translateY(20px);
+}}
+.frame.active .staggered-grid > *:nth-child(1) {{ animation: fadeUp 0.5s var(--ease-out-expo) 0.2s forwards; }}
+.frame.active .staggered-grid > *:nth-child(2) {{ animation: fadeUp 0.5s var(--ease-out-expo) 0.35s forwards; }}
+.frame.active .staggered-grid > *:nth-child(3) {{ animation: fadeUp 0.5s var(--ease-out-expo) 0.5s forwards; }}
+.frame.active .staggered-grid > *:nth-child(4) {{ animation: fadeUp 0.5s var(--ease-out-expo) 0.65s forwards; }}
+
+/* ICON CARD - Icon with label */
+.icon-card {{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+  padding: 30px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 20px;
+}}
+.icon-card .icon {{
+  font-size: 48px;
+  width: 80px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba({primary_rgb[0]},{primary_rgb[1]},{primary_rgb[2]},0.2), rgba({secondary_rgb[0]},{secondary_rgb[1]},{secondary_rgb[2]},0.2));
+  border-radius: 20px;
+}}
+.icon-card .label {{
+  font-family: 'Inter', sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: white;
+  text-align: center;
+}}
+
+/* QUOTE BLOCK - Testimonial/quote styling */
+.quote-block {{
+  position: relative;
+  padding: 40px 50px;
+  max-width: 800px;
+  opacity: 0;
+  transform: translateY(30px);
+}}
+.frame.active .quote-block {{
+  animation: fadeUp 0.8s var(--ease-out-expo) 0.3s forwards;
+}}
+.quote-block::before {{
+  content: '"';
+  position: absolute;
+  top: 0;
+  left: 20px;
+  font-size: 120px;
+  font-family: Georgia, serif;
+  color: {primary_color};
+  opacity: 0.3;
+  line-height: 1;
+}}
+.quote-text {{
+  font-family: 'Inter', sans-serif;
+  font-size: 32px;
+  font-weight: 400;
+  font-style: italic;
+  color: white;
+  line-height: 1.6;
+}}
+.quote-author {{
+  font-family: 'Inter', sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+  color: {accent_color};
+  margin-top: 20px;
+}}
+
+/* TIMELINE - Vertical timeline for steps/process */
+.timeline {{
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  position: relative;
+  padding-left: 60px;
+}}
+.timeline::before {{
+  content: '';
+  position: absolute;
+  left: 20px;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(180deg, {primary_color}, {secondary_color});
+  opacity: 0.3;
+}}
+.timeline-item {{
+  position: relative;
+  padding: 20px 0;
+  opacity: 0;
+  transform: translateX(-20px);
+}}
+.frame.active .timeline-item {{
+  animation: timelineSlide 0.6s var(--ease-out-expo) forwards;
+}}
+.frame.active .timeline-item:nth-child(1) {{ animation-delay: 0.2s; }}
+.frame.active .timeline-item:nth-child(2) {{ animation-delay: 0.4s; }}
+.frame.active .timeline-item:nth-child(3) {{ animation-delay: 0.6s; }}
+.frame.active .timeline-item:nth-child(4) {{ animation-delay: 0.8s; }}
+@keyframes timelineSlide {{
+  0% {{ opacity: 0; transform: translateX(-20px); }}
+  100% {{ opacity: 1; transform: translateX(0); }}
+}}
+.timeline-dot {{
+  position: absolute;
+  left: -50px;
+  top: 25px;
+  width: 20px;
+  height: 20px;
+  background: linear-gradient(135deg, {primary_color}, {accent_color});
+  border-radius: 50%;
+  border: 3px solid #1a1a1a;
+  z-index: 1;
+}}
+.timeline-content {{
+  background: rgba(255,255,255,0.05);
+  border-radius: 16px;
+  padding: 25px;
+  border: 1px solid rgba(255,255,255,0.1);
+}}
+.timeline-title {{
+  font-family: 'Inter', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: white;
+  margin-bottom: 8px;
+}}
+.timeline-desc {{
+  font-family: 'Inter', sans-serif;
+  font-size: 16px;
+  color: rgba(255,255,255,0.7);
+}}
 </style>
 ```
 
@@ -3275,6 +4618,52 @@ PREMIUM ELEMENTS TO INCLUDE:
    - class='text-clamp-4' - limit to 4 lines with ellipsis
    - class='text-safe' - container that won't overflow (max-height with hidden overflow)
    RULES: Headlines should use text-clamp-2, subtitles text-clamp-3. NEVER let text overflow frame!
+
+📊 INFOGRAPHIC ANIMATIONS - For data-driven and educational content:
+   TEXT ANIMATIONS:
+   - class='typewriter' - Character-by-character reveal with blinking cursor
+   - class='word-reveal' - Word-by-word staggered entrance (use on each <span>)
+   - class='text-bounce' - Playful bounce entrance for impactful text
+   - class='text-split-left/right' - Split text that slides in from sides
+   - class='text-glitch' data-text="..." - Digital glitch effect (tech/gaming)
+   - class='text-gradient-wave' - Animated flowing gradient
+   - class='text-pulse' - Subtle scale pulse for attention
+   - class='counter-animate' - Scale-up reveal for numbers/stats
+
+   STAT CARDS (for displaying numbers/metrics):
+   <div class="stat-card">
+     <span class="stat-number counter-animate">98%</span>
+     <span class="stat-label">SATISFACTION</span>
+     <span class="stat-sublabel">Based on 10,000+ reviews</span>
+   </div>
+
+   FEATURE LIST (animated checkmarks):
+   <div class="feature-list">
+     <div class="feature-item">
+       <span class="feature-check">✓</span>
+       <span class="feature-text">Feature description here</span>
+     </div>
+   </div>
+
+   PROGRESS INDICATORS:
+   - Horizontal bar: <div class="progress-bar-horizontal" style="--fill-width: 75%;"><div class="fill"></div></div>
+   - Circular: Use .circular-progress with SVG (see templates)
+
+   ICON ANIMATIONS (for any icon/emoji):
+   - class='icon-bounce' - Subtle up/down float
+   - class='icon-spin' - Continuous rotation
+   - class='icon-pulse' - Scale pulse
+   - class='icon-shake' - Attention-grabbing shake
+
+   LAYOUT HELPERS:
+   - class='staggered-grid' - 2x2 grid with staggered fade-in
+   - class='timeline' - Vertical timeline with dots
+   - class='animated-divider' - Expanding gradient line
+   - class='animated-badge' - Pop-in pill badge
+   - class='quote-block' - Styled testimonial container
+
+   AMBIENT EFFECTS:
+   - <div class="particle"></div> (add 3-5) - Floating particles
 
 {"4. Add progress bar at top showing video segments" if features.progress_bar else ""}
 {"5. Add <button class='cta-button'>SHOP NOW</button> on the FINAL frame (animated CTA)" if features.cta_button else ""}
