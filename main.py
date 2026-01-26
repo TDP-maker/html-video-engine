@@ -279,6 +279,16 @@ component_registry.register(Component(
         "no_text": '''<div class="frame lifestyle active">
   <img src="{image_url}" class="lifestyle-img" alt="{product_name}">
   <div class="lifestyle-overlay"></div>
+</div>''',
+        "fullscreen": '''<div class="frame lifestyle lifestyle-fullscreen active">
+  <img src="{image_url}" class="lifestyle-img" alt="{product_name}">
+  <div class="text-area" style="bottom: 80px !important;">
+    <h1 class="text-clamp-2">{headline}</h1>
+    <p class="text-clamp-3">{subheadline}</p>
+  </div>
+</div>''',
+        "fullscreen_no_text": '''<div class="frame lifestyle lifestyle-fullscreen active">
+  <img src="{image_url}" class="lifestyle-img" alt="{product_name}">
 </div>'''
     }
 ))
@@ -3603,18 +3613,45 @@ body {{ background: #0a0a0a; -webkit-font-smoothing: antialiased; -moz-osx-font-
 .product-img {{ width: 950px; height: auto; max-height: 1200px; object-fit: contain; filter: drop-shadow(0 30px 60px rgba(0,0,0,0.5)) drop-shadow(0 0 100px rgba({primary_rgb[0]},{primary_rgb[1]},{primary_rgb[2]},0.3)); }}
 
 /* LIFESTYLE TREATMENT - Full bleed, edge to edge, NO ANIMATION */
-.frame.lifestyle {{ padding: 0 !important; background: #000; }}
+.frame.lifestyle {{ padding: 0 !important; background: transparent !important; }}
 .frame.lifestyle .bg-glow {{ display: none; }}  /* Hide animated glow for lifestyle */
 .lifestyle-img {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 1; z-index: 0; }}
-.frame.active .lifestyle-img {{ animation: none; opacity: 1; }}  /* NO animation, just static */
-.lifestyle-overlay {{ position: absolute; bottom: 0; left: 0; width: 100%; height: 50%; background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.4) 50%, transparent 100%); z-index: 1; }}
+.frame.active .lifestyle-img {{ animation: none !important; transform: none !important; opacity: 1; }}  /* NO animation, completely static */
+.lifestyle-overlay {{ position: absolute; bottom: 0; left: 0; width: 100%; height: 40%; background: linear-gradient(to top, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.3) 50%, transparent 100%); z-index: 1; }}
 
-/* LIFESTYLE TEXT - Only show ONE headline, hide extras */
-.frame.lifestyle .text-area {{ z-index: 10; }}
+/* LIFESTYLE TEXT - Positioned at bottom, clear of image content */
+.frame.lifestyle .text-area {{
+  z-index: 10;
+  bottom: 120px !important;  /* Lower position for lifestyle */
+  left: 60px !important;
+  right: 60px !important;
+}}
+.frame.lifestyle .text-area h1 {{
+  font-size: clamp(42px, 6vw, 64px);  /* Slightly smaller for lifestyle */
+  text-shadow: 0 4px 40px rgba(0,0,0,0.8), 0 2px 10px rgba(0,0,0,0.9);  /* Stronger shadow for readability */
+}}
+.frame.lifestyle .text-area p {{
+  text-shadow: 0 2px 30px rgba(0,0,0,0.8);
+}}
 .frame.lifestyle .text-area h1:not(:first-of-type) {{ display: none; }}  /* Hide extra h1s */
 .frame.lifestyle .text-area p:not(:first-of-type) {{ display: none; }}  /* Hide extra paragraphs */
 .frame.lifestyle .trust-badges {{ display: none; }}  /* No trust badges */
 .frame.lifestyle .price-badge {{ display: none; }}  /* No price badges */
+
+/* LIFESTYLE - Reduce visual noise for clean fullscreen look */
+/* Uses :has() to detect when lifestyle frame is active */
+.reel-container:has(.frame.lifestyle.active) .film-grain {{ opacity: 0.02 !important; }}
+.reel-container:has(.frame.lifestyle.active) .vignette {{ opacity: 0.15 !important; }}
+.reel-container:has(.frame.lifestyle.active) .color-grade {{ opacity: 0.5 !important; }}
+.reel-container:has(.frame.lifestyle.active) {{ background: transparent !important; }}
+
+/* LIFESTYLE FULLSCREEN - Completely clean, no overlays or effects */
+.frame.lifestyle-fullscreen {{ background: transparent !important; }}
+.frame.lifestyle-fullscreen .lifestyle-overlay {{ display: none !important; }}
+.reel-container:has(.frame.lifestyle-fullscreen.active) .film-grain {{ opacity: 0 !important; animation: none !important; }}
+.reel-container:has(.frame.lifestyle-fullscreen.active) .vignette {{ opacity: 0 !important; }}
+.reel-container:has(.frame.lifestyle-fullscreen.active) .color-grade {{ opacity: 0 !important; }}
+.reel-container:has(.frame.lifestyle-fullscreen.active) .bg-glow {{ opacity: 0 !important; }}
 
 /* AI BACKGROUND TREATMENT - Cinematic atmosphere */
 .ai-bg {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 1; z-index: 0; }}
